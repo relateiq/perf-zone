@@ -1,6 +1,6 @@
 {
   "name": "perf-zone",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "a library for measuring performance in single page apps",
   "main": "src/index.js",
   "devDependencies": {
