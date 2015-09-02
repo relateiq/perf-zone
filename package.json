@@ -4,11 +4,9 @@
   "description": "a library for measuring performance in single page apps",
   "main": "src/index.js",
   "devDependencies": {
+    "browserify": "~11.0.1",
     "browserify-istanbul": "~0.1.5",
-    "gulp": "~3.8.11",
-    "gulp-tasks-riq": "~0.2.0",
-    "karma": "~0.12.31",
-    "yargs": "~3.9.0"
+    "karma": "~0.12.31"
   },
   "scripts": {
     "test": "gulp karma"
