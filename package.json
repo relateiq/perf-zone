@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "a library for measuring performance in single page apps",
   "main": "src/index.js",
+   "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "devDependencies": {
     "browserify": "~11.0.1",
     "browserify-istanbul": "~0.1.5",
