@@ -26,5 +26,8 @@
   "bugs": {
     "url": "https://github.com/relateiq/perf-zone/issues"
   },
-  "homepage": "https://github.com/relateiq/perf-zone"
+  "homepage": "https://github.com/relateiq/perf-zone",
+  "dependencies": {
+    "zone.js": "~0.5.4"
+  }
 }
