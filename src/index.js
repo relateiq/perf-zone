@@ -1,15 +1,12 @@
 require('./performance-now');
-require('mutationobserver-shim');
-var debugLog = require('@web/debug-log');
-//these are polyfills for stupid phantomjs
+// these are polyfills for stupid phantomjs
 var timelineId = 0;
 var networkIdCount = 0;
 
-//current timeline should be set as the timeline that is associated with the latest js turn
+// current timeline should be set as the timeline that is associated with the latest js turn
 var currentTimeline;
 var lastEvent;
 var currentParentTimeoutCallback;
-var currentParentTimeoutCaller;
 var currentParentTimeoutId;
 var timeoutIdToTimelineId = {};
 var networkIdToTimelineId = {};
@@ -143,7 +140,7 @@ function trackedTimeout() {
         if (!isNonTerminating) {
             currentTimeline = completeTimeout(timeoutId);
         } else {
-            debugLog.log('got timeout setting same callback within callback. treating it like an interval');
+            console.log('got timeout setting same callback within callback. treating it like an interval');
             riqPerfEventCapture({
                 type: 'pseudo_interval'
             });
@@ -275,7 +272,7 @@ function maybeCompleteTimelines() {
     Object.values(notWaitingTimelinesById).forEach(function(timeline) {
         if (timeline && !isTimelineWaiting(timeline)) {
             if (timeline.measurements.length <= 1) {
-                debugLog.log('got timeline which resulted in nothing but a trigger not completing');
+                console.log('got timeline which resulted in nothing but a trigger not completing');
             } else {
                 //normalize marks
                 var begin = timeline.measurements[0].timestamp;
@@ -353,8 +350,8 @@ function riqPerformanceNetworkHandler(url, promise) {
                 NETWORK_PROPS.forEach(function(networkProp) {
                     timeline.measurements.push(makeMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]));
                 });
-            } else if (eventName !== 'network_error') { //TODO: only log this in debug mode
-                debugLog.log('could not find entry for ' + url + ' that started after we sent the request');
+            } else if (eventName !== 'network_error') { // TODO: only log this in debug mode
+                console.log('could not find entry for ' + url + ' that started after we sent the request');
             }
             timeline.measurements.push(completionMark);
             currentTimeline = completeAjax(networkId);
