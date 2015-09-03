@@ -1,215 +1,55 @@
 require('./performance-now');
+var zoneJS = require('zone.js');
 // these are polyfills for stupid phantomjs
 var timelineId = 0;
-var networkIdCount = 0;
+var onTimeline;
+var onMark;
 
-// current timeline should be set as the timeline that is associated with the latest js turn
-var currentTimeline;
-var lastEvent;
-var currentParentTimeoutCallback;
-var currentParentTimeoutId;
-var timeoutIdToTimelineId = {};
-var networkIdToTimelineId = {};
-var waitingTimelinesById = {};
-var notWaitingTimelinesById = {};
-var timeoutIdChainCounts = {};
-var MAX_INTERVAL_COUNT = 10;
-var onTimelineComplete = function() {
-    //noop to prevent npes;
-};
-var TRIGGER_EVENTS = ['mousedown', 'keydown', 'mousewheel', 'mousemove'];
+var ZONED_EVENT_TYPE_MAP = ['click', 'mousemove', 'mousewheel'].reduce(function(map, type) {
+    map[type] = true;
+    return map;
+}, {});
 var NETWORK_PROPS = ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd', 'requestStart', 'responseStart', 'responseEnd'];
-
-//other possible triggers resize, mutation observers, transition events, web workers
-
-function riqPerfEventCapture(e) {
-    //if we didn't get dom manip the next user event will complete the prior timeline
-    maybeCompleteTimelines();
-    lastEvent = e;
-    currentTimeline = null;
-}
 
 function createTimelineFromTrigger(e) {
     var tcs = e.target && getTcs(e.target);
-    var mark = makeMark('trigger', {
-        event_type: e.type,
-        event_target: tcs
-    });
     var timeline = {
         id: ++timelineId,
-        numWaiting: 0,
-        totalTimeouts: 0,
-        totalIntervals: 0,
-
-        measurements: [mark]
+        action: e.type,
+        components: tcs,
+        created_timestamp: Date.now(),
+        time_since_page_load: window.performance.now()
     };
     if (window.performance.memory) {
         Object.keys(window.performance.memory).forEach(function(key) {
             timeline[key] = window.performance.memory[key] / 1000 / 1000;
         });
     }
+    if (onTimeline) {
+        onTimeline(timeline);
+    }
     return timeline;
 }
 
 function getCurrentTimeline() {
-    if (!currentTimeline && lastEvent) {
-        currentTimeline = createTimelineFromTrigger(lastEvent);
-        lastEvent = null;
-    }
-    return currentTimeline;
+    return perfZone.currentZone && perfZone.currentZone.timeline;
 }
 
-function makeMark(name, detail, timestampOverride) {
+function makeMark(name, detail, timestampOverride, timeline) {
     var mark = {
+        timelineId: timeline.id,
         name: name,
-        timestamp: timestampOverride || window.performance.now(),
-        detail: detail || {}
+        timestamp: (timestampOverride || window.performance.now()) - timeline.time_since_page_load
     };
+    if (detail) {
+        Object.keys(detail, function(key) {
+            mark[key] = detail[key];
+        });
+    }
     return mark;
 }
 
-function trackedClearInterval(intervalId) {
-    if (riqPerformance.started) {
-        completeTimeout(intervalId);
-    }
-    riqPerformance.clearInterval.call(this, intervalId);
-}
-
-function trackedInterval() {
-    if (!riqPerformance.started) {
-        return riqPerformance.setInterval.apply(this, arguments);
-    }
-    var isLongInterval = arguments[1] > 1000;
-    var origCb = arguments[0];
-    var count = 0;
-    arguments[0] = function riqPerfTrackedIntervalCallback() {
-
-        if (count <= MAX_INTERVAL_COUNT) {
-            count++;
-        } else {
-            if (!isLongInterval) {
-                completeTimeout(intervalId);
-            }
-            //treat interval execution like an event so it will have it's own timeline and complete previous
-            riqPerfEventCapture({
-                type: 'interval'
-            });
-        }
-        origCb.apply(this, arguments);
-
-    };
-
-
-    var intervalId = riqPerformance.setInterval.apply(this, arguments);
-    if (isLongInterval) { //long intervals we will assume are non terminating
-        count = MAX_INTERVAL_COUNT + 1;
-        return;
-    }
-    var timeline = getCurrentTimeline();
-    if (timeline) {
-        timeline.totalIntervals++;
-        incrementTimelineWait(timeline);
-        timeoutIdToTimelineId[intervalId] = timeline.id;
-    }
-}
-
-function checkTimeoutChainCount(timeoutId, parentId) {
-    var isNonTerminating = false;
-    var count;
-    if (parentId) {
-        count = timeoutIdChainCounts[parentId];
-        delete timeoutIdChainCounts[parentId];
-        if (count > 10) {
-            isNonTerminating = true;
-        }
-        timeoutIdChainCounts[timeoutId] = (count || 0) + 1;
-    }
-    return isNonTerminating;
-}
-
-function trackedTimeout() {
-    if (!riqPerformance.started) {
-        return riqPerformance.setTimeout.apply(this, arguments);
-    }
-    var origCb = arguments[0];
-
-    //assume this is a recursive timeout aka they should have used an interval
-    var isNonTerminating;
-
-    arguments[0] = function riqPerfTrackedTimeoutCallback() {
-        if (!isNonTerminating) {
-            currentTimeline = completeTimeout(timeoutId);
-        } else {
-            console.log('got timeout setting same callback within callback. treating it like an interval');
-            riqPerfEventCapture({
-                type: 'pseudo_interval'
-            });
-        }
-        var prevParent = currentParentTimeoutCallback;
-        var prevId = currentParentTimeoutId;
-        currentParentTimeoutCallback = origCb;
-        currentParentTimeoutId = timeoutId;
-        origCb.apply(this, arguments);
-        currentParentTimeoutCallback = prevParent;
-        currentParentTimeoutCallback = prevId;
-    };
-
-    var timeoutId = riqPerformance.setTimeout.apply(this, arguments);
-    isNonTerminating = checkTimeoutChainCount(timeoutId, currentParentTimeoutId);
-    if (!isNonTerminating) {
-        var timeline = getCurrentTimeline();
-        if (timeline) {
-            timeline.totalTimeouts++;
-            incrementTimelineWait(timeline);
-            timeoutIdToTimelineId[timeoutId] = timeline.id;
-        }
-    }
-    return timeoutId;
-}
-
-function trackedClearTimeout(timeoutId) {
-    if (riqPerformance.started) {
-        completeTimeout(timeoutId);
-    }
-    riqPerformance.clearTimeout.call(this, timeoutId);
-}
-
-function incrementTimelineWait(timeline) {
-    timeline.numWaiting++;
-    waitingTimelinesById[timeline.id] = timeline;
-    notWaitingTimelinesById[timeline.id] = null;
-}
-
-function maybeRemoveFromWaiting(timeline) {
-    if (!isTimelineWaiting(timeline)) {
-        waitingTimelinesById[timeline.id] = null;
-        notWaitingTimelinesById[timeline.id] = timeline;
-    }
-}
-
-function completeTimeout(timeoutId) {
-    return completeAsync(timeoutId, timeoutIdToTimelineId);
-}
-
-function completeAjax(networkId) {
-    return completeAsync(networkId, networkIdToTimelineId);
-}
-
-function completeAsync(id, idMap) {
-    var timeline = waitingTimelinesById[idMap[id]];
-    if (!timeline) {
-        return;
-    }
-    timeline.numWaiting--;
-    idMap[id] = null;
-    maybeRemoveFromWaiting(timeline);
-    return timeline;
-}
-
-
-
 function getTcs(node, tcs) {
-
     tcs = tcs || [];
     var thisTc = node.getAttribute && (node.getAttribute('tc') || node.getAttribute('class'));
     if (thisTc) {
@@ -245,11 +85,9 @@ function tcMutationHandler(nodes) {
             Object.keys(counts).forEach(function(tc) {
                 tcs.push(tc + ' ' + counts[tc]);
             });
-            var mark = makeMark('render', {
-                componenent_list: tcs,
-                numTimeouts: timeline.totalTimeouts
+            perfZone.addMark('render', {
+                componenent_list: tcs
             });
-            timeline.measurements.push(mark);
         }
     }
 }
@@ -267,53 +105,22 @@ function collectNodesFromMutation(mutation) {
     return result;
 }
 
-
-function maybeCompleteTimelines() {
-    Object.values(notWaitingTimelinesById).forEach(function(timeline) {
-        if (timeline && !isTimelineWaiting(timeline)) {
-            if (timeline.measurements.length <= 1) {
-                console.log('got timeline which resulted in nothing but a trigger not completing');
-            } else {
-                //normalize marks
-                var begin = timeline.measurements[0].timestamp;
-                timeline.measurements.forEach(function(m) {
-                    m.timestamp = (m.timestamp - begin).toFixed(2);
-                });
-                timeline.timeOnPageAtStart = begin;
-                if (riqPerformance.started) {
-                    onTimelineComplete(timeline);
-                }
-            }
-        }
-    });
-    notWaitingTimelinesById = {};
-    currentTimeline = null;
-}
-
-function isTimelineWaiting(timeline) {
-    return timeline.numWaiting > 0;
-}
-
 var componentObserver = new MutationObserver(function(mutations) {
     var nodes = angular.element.unique(mutations.map(collectNodesFromMutation).flatten(1));
     tcMutationHandler(nodes);
 });
 
 function riqPerformanceNetworkHandler(url, promise) {
-    if (!riqPerformance.started) {
+    if (!perfZone.started) {
         return;
     }
     var timeline = getCurrentTimeline();
     if (!timeline) {
         return;
     }
-    var networkId = ++networkIdCount;
-    var startMark = makeMark('network_send', {
-        numTimeouts: timeline.totalTimeouts,
+    var startMark = perfZone.addMark('network_send', {
         url: url
     });
-    incrementTimelineWait(timeline);
-    networkIdToTimelineId[networkId] = timeline.id;
     var entries = window.performance.getEntriesByType('Resource');
     //if these are about to get maxed we have to clear or we will lose resolution on the network timing
     if (entries.length >= 149) {
@@ -326,10 +133,9 @@ function riqPerformanceNetworkHandler(url, promise) {
     function getCallback(eventName) {
         return function() {
             var networkDetail = {
-                numTimeouts: timeline.totalTimeouts,
                 url: url
             };
-            var completionMark = makeMark(eventName, networkDetail);
+            var completionMark = perfZone.addMark(eventName, networkDetail);
             var resourceEntry;
             var entry;
             var entries = window.performance.getEntriesByType('Resource');
@@ -348,58 +154,18 @@ function riqPerformanceNetworkHandler(url, promise) {
             timeline.measurements.push(startMark);
             if (resourceEntry) {
                 NETWORK_PROPS.forEach(function(networkProp) {
-                    timeline.measurements.push(makeMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]));
+                    timeline.measurements.push(perfZone.addMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]));
                 });
             } else if (eventName !== 'network_error') { // TODO: only log this in debug mode
                 console.log('could not find entry for ' + url + ' that started after we sent the request');
             }
             timeline.measurements.push(completionMark);
-            currentTimeline = completeAjax(networkId);
         };
     }
 
     promise.then(getCallback('network_success'), getCallback('network_error'));
 
 }
-
-var riqPerformance = {
-    start: function start(cb) {
-        onTimelineComplete = cb || onTimelineComplete;
-        TRIGGER_EVENTS.forEach(function(type) {
-            document.body.addEventListener(type, riqPerfEventCapture, true);
-        });
-
-        componentObserver.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true
-        });
-        riqPerformance.started = true;
-    },
-    stop: function() {
-        TRIGGER_EVENTS.forEach(function(type) {
-            document.body.removeEventListener(type, riqPerfEventCapture);
-        });
-        componentObserver.disconnect();
-        window.setTimeout = riqPerformance.setTimeout;
-        window.clearTimeout = riqPerformance.clearTimeout;
-        window.setInterval = riqPerformance.setInterval;
-        window.clearInterval = riqPerformance.clearInterval;
-        riqPerformance.started = false;
-    },
-    setTimeout: window.setTimeout,
-    clearTimeout: window.clearTimeout,
-    setInterval: window.setInterval,
-    clearInterval: window.clearInterval,
-    addMark: function addMark() {
-        var timeline = getCurrentTimeline();
-        if (timeline) {
-            var mark = makeMark.apply(this, arguments);
-            timeline.measurements.push(mark);
-            return mark;
-        }
-    }
-};
 
 var origXHR = window.XMLHttpRequest;
 window.XMLHttpRequest = function() {
@@ -421,20 +187,75 @@ window.XMLHttpRequest = function() {
     return xhr;
 };
 
-//have to do these right away in case someone traps setInterval, etc. in a closure
-window.setTimeout = trackedTimeout;
-window.clearTimeout = trackedClearTimeout;
-window.setInterval = trackedInterval;
-window.clearInterval = trackedClearInterval;
-
-lastEvent = {
+var perfZone = createTimelineZone({
     type: 'page_load'
+});
+
+function createTimelineZone(e) {
+    var timeline = createTimelineFromTrigger(e);
+    var timelineZone = zoneJS.zone.fork({
+        beforeTask: function() {
+            console.log('entering zone for handler of ', timelineZone.timeline.action);
+            perfZone.currentZone = timelineZone;
+        },
+        afterTask: function() {
+            // console.log('perf zone leave');
+        }
+    });
+    timelineZone.timeline = timeline;
+    return timelineZone;
+}
+
+
+(function() {
+    var delegate = window.EventTarget.prototype.addEventListener;
+    window.EventTarget.prototype.addEventListener = function() {
+        var handler = arguments[1];
+        var type = arguments[0];
+        arguments[1] = function() {
+            if (ZONED_EVENT_TYPE_MAP[type]) {
+                var e = arguments[0];
+                var timelineZone = createTimelineZone(e);
+                return timelineZone.run(handler, handler, arguments);
+            }
+            return handler.apply(handler, arguments);
+        };
+        return delegate.apply(this, arguments);
+    };
+})();
+
+perfZone.start = function start(onTimelineCb, onMarkCb) {
+    onTimeline = onTimelineCb;
+    onMark = onMarkCb;
+
+    componentObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true
+    });
+    perfZone.started = true;
+};
+
+perfZone.stop = function() {
+    componentObserver.disconnect();
+    perfZone.started = false;
+};
+
+perfZone.addMark = function addMark(name, detail, timestampOverride) {
+    var timeline = getCurrentTimeline();
+    if (timeline) {
+        var mark = makeMark.call(this, name, detail, timestampOverride, timeline);
+        onMark(mark);
+        return mark;
+    }
 };
 
 
-module.exports = riqPerformance;
+
+
+module.exports = perfZone;
 //FOR DEBUGGING ONLY
 if (window) {
-    window.riqPerformance = riqPerformance;
+    window.perfZone = perfZone;
 
 }
