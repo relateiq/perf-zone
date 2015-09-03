@@ -2,13 +2,22 @@ require('./performance-now');
 var zoneJS = require('zone.js');
 // these are polyfills for stupid phantomjs
 var timelineId = 0;
-var onTimeline;
-var onMark;
+var timelines = [];
+var marks = [];
 
-var ZONED_EVENT_TYPE_MAP = ['click', 'mousemove', 'mousewheel'].reduce(function(map, type) {
-    map[type] = true;
-    return map;
-}, {});
+var ZONED_EVENT_TYPE_MAP = trueMap(['mousedown', 'mousemove', 'mousewheel', 'keydown']);
+
+function trueMap(array) {
+    return array.reduce(function(map, type) {
+        return map[type] = true && map;
+    }, {});
+}
+
+var MOUSE_KEY_TYPES = ['focus', 'blur', 'cut', 'copy', 'paste'];
+var RELATED_TYPES = {
+    'mousedown': trueMap(['mouseup', 'click', 'mousemove', 'dragstart', 'drag', 'dragend'].concat(MOUSE_KEY_TYPES)),
+    'mousemove': trueMap(['dragstart', 'drag'])
+};
 var NETWORK_PROPS = ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd', 'requestStart', 'responseStart', 'responseEnd'];
 
 function createTimelineFromTrigger(e) {
@@ -25,14 +34,20 @@ function createTimelineFromTrigger(e) {
             timeline[key] = window.performance.memory[key] / 1000 / 1000;
         });
     }
-    if (onTimeline) {
-        onTimeline(timeline);
-    }
+    timelines.push(timeline);
     return timeline;
 }
 
 function getCurrentTimeline() {
-    return perfZone.currentZone && perfZone.currentZone.timeline;
+    var currentZone = perfZone.currentZone;
+    if (!currentZone) {
+        return;
+    }
+    if (!currentZone.timeline) {
+        currentZone.timeline = createTimelineFromTrigger(currentZone.event);
+        delete currentZone.event;
+    }
+    return currentZone.timeline;
 }
 
 function makeMark(name, detail, timestampOverride, timeline) {
@@ -66,29 +81,26 @@ function getTcs(node, tcs) {
 function tcMutationHandler(nodes) {
     if (nodes.length) {
         //it really shouldn't be possible not to have one of these but in tests it is so null check to be safe
-        var timeline = getCurrentTimeline();
-        if (timeline) {
-            var tcs = [];
-            nodes.forEach(function(node) {
-                getTcs(node, tcs);
-            });
-            var counts = {};
-            tcs.forEach(function(tc) {
-                var count = counts[tc];
-                if (!count) {
-                    counts[tc] = 1;
-                } else {
-                    counts[tc] = count + 1;
-                }
-            });
-            tcs = [];
-            Object.keys(counts).forEach(function(tc) {
-                tcs.push(tc + ' ' + counts[tc]);
-            });
-            perfZone.addMark('render', {
-                componenent_list: tcs
-            });
-        }
+        var tcs = [];
+        nodes.forEach(function(node) {
+            getTcs(node, tcs);
+        });
+        var counts = {};
+        tcs.forEach(function(tc) {
+            var count = counts[tc];
+            if (!count) {
+                counts[tc] = 1;
+            } else {
+                counts[tc] = count + 1;
+            }
+        });
+        tcs = [];
+        Object.keys(counts).forEach(function(tc) {
+            tcs.push(tc + ' ' + counts[tc]);
+        });
+        perfZone.addMark('render', {
+            componenent_list: tcs
+        });
     }
 }
 
@@ -114,10 +126,7 @@ function riqPerformanceNetworkHandler(url, promise) {
     if (!perfZone.started) {
         return;
     }
-    var timeline = getCurrentTimeline();
-    if (!timeline) {
-        return;
-    }
+
     var startMark = perfZone.addMark('network_send', {
         url: url
     });
@@ -192,17 +201,16 @@ var perfZone = createTimelineZone({
 });
 
 function createTimelineZone(e) {
-    var timeline = createTimelineFromTrigger(e);
     var timelineZone = zoneJS.zone.fork({
         beforeTask: function() {
-            console.log('entering zone for handler of ', timelineZone.timeline.action);
-            perfZone.currentZone = timelineZone;
+            // console.log('entering zone for handler of ', this.timeline.action);
+            perfZone.currentZone = this;
         },
         afterTask: function() {
             // console.log('perf zone leave');
         }
     });
-    timelineZone.timeline = timeline;
+    timelineZone.event = e;
     return timelineZone;
 }
 
@@ -224,10 +232,7 @@ function createTimelineZone(e) {
     };
 })();
 
-perfZone.start = function start(onTimelineCb, onMarkCb) {
-    onTimeline = onTimelineCb;
-    onMark = onMarkCb;
-
+perfZone.start = function start() {
     componentObserver.observe(document.body, {
         childList: true,
         subtree: true,
@@ -239,21 +244,37 @@ perfZone.start = function start(onTimelineCb, onMarkCb) {
 perfZone.stop = function() {
     componentObserver.disconnect();
     perfZone.started = false;
+    // clear cached data on stop for memory
+    perfZone.popAllTimelines();
+    perfZone.popAllMarks();
 };
 
 perfZone.addMark = function addMark(name, detail, timestampOverride) {
     var timeline = getCurrentTimeline();
     if (timeline) {
         var mark = makeMark.call(this, name, detail, timestampOverride, timeline);
-        onMark(mark);
+        marks.push(mark);
         return mark;
     }
 };
 
+perfZone.popAllTimelines = function() {
+    var popped = timelines;
+    timelines = [];
+    return popped;
+};
 
+perfZone.popAllMarks = function() {
+    var popped = marks;
+    marks = [];
+    return popped;
+};
+
+perfZone.start(); //starts by default to make sure to capture the beginning events
 
 
 module.exports = perfZone;
+
 //FOR DEBUGGING ONLY
 if (window) {
     window.perfZone = perfZone;
