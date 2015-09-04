@@ -5,7 +5,7 @@ var timelineId = 0;
 var timelines = [];
 var marks = [];
 
-var ZONED_EVENT_TYPE_MAP = trueMap(['mousedown', 'mousemove', 'mousewheel', 'keydown']);
+var ZONED_EVENT_TYPE_MAP = trueMap(['click']);
 
 function trueMap(array) {
     return array.reduce(function(map, type) {
@@ -15,8 +15,11 @@ function trueMap(array) {
 
 var MOUSE_KEY_TYPES = ['focus', 'blur', 'cut', 'copy', 'paste'];
 var RELATED_TYPES = {
-    'mousedown': trueMap(['mouseup', 'click', 'mousemove', 'dragstart', 'drag', 'dragend'].concat(MOUSE_KEY_TYPES)),
-    'mousemove': trueMap(['dragstart', 'drag'])
+    'mousedown': trueMap(['mouseup', 'click', 'dblclickx', 'mousemove', 'dragstart', 'drag', 'dragend'].concat(MOUSE_KEY_TYPES)),
+    'mousemove': trueMap(['dragstart', 'drag']),
+    'mousewheel': {},
+    'keydown': trueMap(['keypress', 'keyup'].concat(MOUSE_KEY_TYPES))
+
 };
 var NETWORK_PROPS = ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd', 'requestStart', 'responseStart', 'responseEnd'];
 
@@ -27,7 +30,7 @@ function createTimelineFromTrigger(e) {
         action: e.type,
         components: tcs,
         created_timestamp: Date.now(),
-        time_since_page_load: window.performance.now()
+        time_since_page_load: window.performance.now().toFixed(2)
     };
     if (window.performance.memory) {
         Object.keys(window.performance.memory).forEach(function(key) {
@@ -39,7 +42,7 @@ function createTimelineFromTrigger(e) {
 }
 
 function getCurrentTimeline() {
-    var currentZone = perfZone.currentZone;
+    var currentZone = zoneJS.zone;
     if (!currentZone) {
         return;
     }
@@ -54,7 +57,7 @@ function makeMark(name, detail, timestampOverride, timeline) {
     var mark = {
         timelineId: timeline.id,
         name: name,
-        timestamp: (timestampOverride || window.performance.now()) - timeline.time_since_page_load
+        timestamp: ((timestampOverride || window.performance.now()) - timeline.time_since_page_load).toFixed(2)
     };
     if (detail) {
         Object.keys(detail, function(key) {
@@ -160,15 +163,13 @@ function riqPerformanceNetworkHandler(url, promise) {
                     }
                 }
             }
-            timeline.measurements.push(startMark);
             if (resourceEntry) {
                 NETWORK_PROPS.forEach(function(networkProp) {
-                    timeline.measurements.push(perfZone.addMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]));
+                    perfZone.addMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]);
                 });
             } else if (eventName !== 'network_error') { // TODO: only log this in debug mode
                 console.log('could not find entry for ' + url + ' that started after we sent the request');
             }
-            timeline.measurements.push(completionMark);
         };
     }
 
@@ -196,15 +197,14 @@ window.XMLHttpRequest = function() {
     return xhr;
 };
 
-var perfZone = createTimelineZone({
-    type: 'page_load'
-});
+
 
 function createTimelineZone(e) {
     var timelineZone = zoneJS.zone.fork({
         beforeTask: function() {
             // console.log('entering zone for handler of ', this.timeline.action);
             perfZone.currentZone = this;
+            console.log(perfZone.currentZone.timeline && perfZone.currentZone.timeline.action || perfZone.currentZone.event.type);
         },
         afterTask: function() {
             // console.log('perf zone leave');
@@ -231,6 +231,8 @@ function createTimelineZone(e) {
         return delegate.apply(this, arguments);
     };
 })();
+
+var perfZone = {};
 
 perfZone.start = function start() {
     componentObserver.observe(document.body, {
@@ -271,6 +273,10 @@ perfZone.popAllMarks = function() {
 };
 
 perfZone.start(); //starts by default to make sure to capture the beginning events
+
+createTimelineZone({
+    type: 'page_load'
+});
 
 
 module.exports = perfZone;
