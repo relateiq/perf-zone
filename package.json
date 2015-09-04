@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "a library for measuring performance in single page apps",
   "main": "src/index.js",
-   "publishConfig": {
+  "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
@@ -28,7 +28,5 @@
     "url": "https://github.com/relateiq/spa-perf/issues"
   },
   "homepage": "https://github.com/relateiq/spa-perf",
-  "dependencies": {
-    "zone.js": "~0.5.4"
-  }
+  "dependencies": {}
 }
