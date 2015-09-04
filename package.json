@@ -1,5 +1,5 @@
 {
-  "name": "perf-zone",
+  "name": "spa-perf",
   "version": "0.0.1",
   "description": "a library for measuring performance in single page apps",
   "main": "src/index.js",
@@ -18,16 +18,16 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/relateiq/perf-zone.git"
+    "url": "https://github.com/relateiq/spa-perf.git"
   },
   "keywords": [
     "performance",
     "javascript"
   ],
   "bugs": {
-    "url": "https://github.com/relateiq/perf-zone/issues"
+    "url": "https://github.com/relateiq/spa-perf/issues"
   },
-  "homepage": "https://github.com/relateiq/perf-zone",
+  "homepage": "https://github.com/relateiq/spa-perf",
   "dependencies": {
     "zone.js": "~0.5.4"
   }
