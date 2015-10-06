@@ -17,6 +17,9 @@ var MAX_INTERVAL_COUNT = 10;
 var onTimelineComplete = function() {
     //noop to prevent npes;
 };
+
+var timelines = [];
+var marks = [];
 var TRIGGER_EVENTS = ['mousedown', 'keydown', 'mousewheel', 'mousemove'];
 var NETWORK_PROPS = ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd', 'requestStart', 'responseStart', 'responseEnd'];
 
@@ -31,23 +34,22 @@ function riqPerfEventCapture(e) {
 
 function createTimelineFromTrigger(e) {
     var tcs = e.target && getTcs(e.target);
-    var mark = makeMark('trigger', {
-        event_type: e.type,
-        event_target: tcs
-    });
     var timeline = {
         id: ++timelineId,
-        numWaiting: 0,
+        action: e.type,
+        components: tcs,
+        created_timestamp: Date.now(),
+        time_since_page_load: window.performance.now(),
         totalTimeouts: 0,
         totalIntervals: 0,
-
-        measurements: [mark]
+        numWaiting: 0
     };
     if (window.performance.memory) {
         Object.keys(window.performance.memory).forEach(function(key) {
             timeline[key] = window.performance.memory[key] / 1000 / 1000;
         });
     }
+    timelines.push(timeline);
     return timeline;
 }
 
@@ -59,12 +61,18 @@ function getCurrentTimeline() {
     return currentTimeline;
 }
 
-function makeMark(name, detail, timestampOverride) {
+function makeMark(name, detail, timestampOverride, timeline) {
     var mark = {
+        timelineId: timeline.id,
         name: name,
-        timestamp: timestampOverride || window.performance.now(),
-        detail: detail || {}
+        timestamp: ((timestampOverride || window.performance.now()) - timeline.time_since_page_load),
+        timelineStart: timeline.time_since_page_load
     };
+    if (detail) {
+        Object.keys(detail, function(key) {
+            mark[key] = detail[key];
+        });
+    }
     return mark;
 }
 
@@ -195,13 +203,13 @@ function completeAjax(networkId) {
     return completeAsync(networkId, networkIdToTimelineId);
 }
 
-function completeAsync(id, idMap) {
-    var timeline = waitingTimelinesById[idMap[id]];
+function completeAsync(asyncId, timelineIdsByAsyncId) {
+    var timeline = waitingTimelinesById[timelineIdsByAsyncId[asyncId]];
     if (!timeline) {
         return;
     }
     timeline.numWaiting--;
-    idMap[id] = null;
+    timelineIdsByAsyncId[asyncId] = null;
     maybeRemoveFromWaiting(timeline);
     return timeline;
 }
@@ -245,11 +253,10 @@ function tcMutationHandler(nodes) {
             Object.keys(counts).forEach(function(tc) {
                 tcs.push(tc + ' ' + counts[tc]);
             });
-            var mark = makeMark('render', {
+            riqPerformance.addMark('render', {
                 componenent_list: tcs,
                 numTimeouts: timeline.totalTimeouts
             });
-            timeline.measurements.push(mark);
         }
     }
 }
@@ -271,18 +278,8 @@ function collectNodesFromMutation(mutation) {
 function maybeCompleteTimelines() {
     Object.values(notWaitingTimelinesById).forEach(function(timeline) {
         if (timeline && !isTimelineWaiting(timeline)) {
-            if (timeline.measurements.length <= 1) {
-                console.log('got timeline which resulted in nothing but a trigger not completing');
-            } else {
-                //normalize marks
-                var begin = timeline.measurements[0].timestamp;
-                timeline.measurements.forEach(function(m) {
-                    m.timestamp = (m.timestamp - begin).toFixed(2);
-                });
-                timeline.timeOnPageAtStart = begin;
-                if (riqPerformance.started) {
-                    onTimelineComplete(timeline);
-                }
+            if (riqPerformance.started && riqPerformance.onTimelineComplete) {
+                riqPerformance.onTimelineComplete(timeline);
             }
         }
     });
@@ -308,7 +305,7 @@ function riqPerformanceNetworkHandler(url, promise) {
         return;
     }
     var networkId = ++networkIdCount;
-    var startMark = makeMark('network_send', {
+    var startMark = riqPerformance.addMark('network_send', {
         numTimeouts: timeline.totalTimeouts,
         url: url
     });
@@ -329,7 +326,12 @@ function riqPerformanceNetworkHandler(url, promise) {
                 numTimeouts: timeline.totalTimeouts,
                 url: url
             };
-            var completionMark = makeMark(eventName, networkDetail);
+            //do this before adding marks
+            currentTimeline = completeAjax(networkId);
+            if (currentTimeline !== timeline) {
+                debugger;
+            }
+            var completionMark = riqPerformance.addMark(eventName, networkDetail);
             var resourceEntry;
             var entry;
             var entries = window.performance.getEntriesByType('Resource');
@@ -337,24 +339,24 @@ function riqPerformanceNetworkHandler(url, promise) {
                 entry = entries[i];
                 //find the entry that started after we made the network request and shares its url
                 if (entry.name.has(url)) {
-                    if (entry.domainLookupStart > startMark.timestamp) {
+                    var startTime = startMark.timestamp + startMark.timelineStart;
+                    if (entry.domainLookupStart > startTime) {
                         //get the closest entry to our timeline start in case there have been more since
-                        if (!resourceEntry || resourceEntry.domainLookupStart - startMark.timestamp > entry.domainLookupStart - startMark.timestamp) {
+                        if (!resourceEntry || resourceEntry.domainLookupStart - startTime > entry.domainLookupStart - startTime) {
                             resourceEntry = entry;
                         }
                     }
                 }
             }
-            timeline.measurements.push(startMark);
             if (resourceEntry) {
                 NETWORK_PROPS.forEach(function(networkProp) {
-                    timeline.measurements.push(makeMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]));
+                    riqPerformance.addMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]);
                 });
             } else if (eventName !== 'network_error') { // TODO: only log this in debug mode
                 console.log('could not find entry for ' + url + ' that started after we sent the request');
             }
-            timeline.measurements.push(completionMark);
-            currentTimeline = completeAjax(networkId);
+
+
         };
     }
 
@@ -391,15 +393,28 @@ var riqPerformance = {
     clearTimeout: window.clearTimeout,
     setInterval: window.setInterval,
     clearInterval: window.clearInterval,
-    addMark: function addMark() {
+    addMark: function addMark(name, detail, timestampOverride) {
         var timeline = getCurrentTimeline();
         if (timeline) {
-            var mark = makeMark.apply(this, arguments);
-            timeline.measurements.push(mark);
+            var mark = makeMark.call(this, name, detail, timestampOverride, timeline);
+            marks.push(mark);
             return mark;
         }
     }
 };
+
+riqPerformance.popAllTimelines = function() {
+    var popped = timelines;
+    timelines = [];
+    return popped;
+};
+
+riqPerformance.popAllMarks = function() {
+    var popped = marks;
+    marks = [];
+    return popped;
+};
+
 
 var origXHR = window.XMLHttpRequest;
 window.XMLHttpRequest = function() {
@@ -431,6 +446,7 @@ lastEvent = {
     type: 'page_load'
 };
 
+riqPerformance.start(); //start by default to not miss events
 
 module.exports = riqPerformance;
 //FOR DEBUGGING ONLY
