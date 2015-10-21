@@ -1,0 +1,93 @@
+#!/bin/bash 
+
+####################################################################
+# Feature Management
+#
+# This script doesn't really contribute to the build itself,
+# but provides a simple interface to enable/disable certain build
+# features
+####################################################################
+
+featcmd=$1
+shift
+featname=$1
+shift
+
+function print-usage() {
+    echo ${1:-"No feature name specified"}
+    echo "Usage: "
+    echo "    iqproj feat enable|disable featurename"
+    exit 1;
+}
+
+if [ -z "$featname" ]; then
+    print-usage;
+fi
+
+case $featname in
+    'app')
+        case $featcmd in
+            'enable')
+                npm install --save-dev browserify browserify-istanbul karma-browserify watchify exorcist
+                tmpfile=$(mktemp -t XXXXXXXX)
+                cat karma.conf.json | jq '.frameworks += ["browserify"]' > $tmpfile 
+                mv $tmpfile karma.conf.json
+
+                npm install --save-dev express tiny-lr connect-livereload node-sass
+                mkdir -p app
+                touch app/index.js
+                if [ ! -f app/index.html ]; then
+                    echo "<html><body>it works</body></html>" > app/index.html
+                fi
+                ;;
+            'disable')
+                npm uninstall --save-dev express tiny-lr connect-livereload node-sass
+                npm uninstall --save-dev browserify browserify-istanbul karma-browserify watchify exorcist
+                tmpfile=$(mktemp -t XXXXXXXX)
+                cat karma.conf.json | jq '.frameworks -= ["browserify"]' > $tmpfile
+                mv $tmpfile karma.conf.json
+                ;;
+            *)
+                print-usage "feat: unknown command $featcmd"
+                ;;
+        esac
+    ;;
+
+    'headless')
+        case $featcmd in
+            'enable')
+                npm install --save-dev karma-script-launcher
+                npm uninstall --save-dev phantomjs karma-phantomjs-launcher
+                tmpfile=$(mktemp -t XXXXXXXX)
+                cat karma.conf.json | jq '.browsers = ["bin/headless"]' > $tmpfile 
+                mv $tmpfile karma.conf.json
+                ;;
+            'disable')
+                npm uninstall --save-dev karma-script-launcher
+                npm install --save-dev phantomjs karma-phantomjs-launcher
+                tmpfile=$(mktemp -t XXXXXXXX)
+                cat karma.conf.json | jq '.browsers = ["PhantomJS"]' > $tmpfile 
+                mv $tmpfile karma.conf.json
+                ;;
+            *)
+                print-usage "feat: unknown command $featcmd"
+                ;;
+        esac
+    ;;
+
+
+    *)
+        echo "Unknown feature $featname";
+        exit 1;
+    ;;
+esac
+
+featflag="false"
+if [ "$featcmd" = "enable" ]; then
+    featflag="true"
+fi
+
+tmpfile=$(mktemp -t XXXXXXXX)
+cat package.json | jq ".iqproj += { $featname: $featflag }" > $tmpfile;
+mv $tmpfile package.json
+

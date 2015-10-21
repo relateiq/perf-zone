@@ -6,27 +6,29 @@
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
-  "devDependencies": {
-    "browserify": "~11.0.1",
-    "browserify-istanbul": "~0.1.5",
-    "karma": "~0.12.31"
-  },
-  "scripts": {
-    "test": "gulp karma"
-  },
   "author": "rusty.camden@gmail.com",
   "license": "MIT",
+  "homepage": "https://github.com/relateiq/bedrock",
   "repository": {
     "type": "git",
     "url": "https://github.com/relateiq/spa-perf.git"
   },
-  "keywords": [
-    "performance",
-    "javascript"
-  ],
   "bugs": {
     "url": "https://github.com/relateiq/spa-perf/issues"
   },
   "homepage": "https://github.com/relateiq/spa-perf",
-  "dependencies": {}
+  "dependencies": {},
+  "iqproj": {
+    "app": false
+  },
+  "scripts": {
+    "test": "./iqb test",
+    "start": "./iqb start",
+    "preversion": "./iqb test"
+  },
+  "devDependencies": {
+    "chokidar-cli": "~1.0.1",
+    "tape": "~4.2.1",
+    "yargs": "~3.26.0"
+  }
 }
