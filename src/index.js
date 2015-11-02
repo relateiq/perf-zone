@@ -45,7 +45,7 @@ function createTimelineFromTrigger(e) {
         numWaiting: 0
     };
     if (window.performance.memory) {
-        Object.keys(window.performance.memory).forEach(function(key) {
+        ['usedJSHeapSize', 'totalJSHeapSize', 'jsHeapSizeLimit'].forEach(function(key) {
             timeline[key] = window.performance.memory[key] / 1000 / 1000;
         });
     }
@@ -400,7 +400,8 @@ var riqPerformance = {
             marks.push(mark);
             return mark;
         }
-    }
+    },
+    pageLoadTimestamp: new Date().getTime()
 };
 
 riqPerformance.popAllTimelines = function() {
