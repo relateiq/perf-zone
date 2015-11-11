@@ -1,6 +1,6 @@
 {
   "name": "spa-perf",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "a library for measuring performance in single page apps",
   "main": "src/index.js",
   "publishConfig": {
@@ -8,7 +8,7 @@
   },
   "author": "rusty.camden@gmail.com",
   "license": "MIT",
-  "homepage": "https://github.com/relateiq/bedrock",
+  "homepage": "https://github.com/relateiq/spa-perf",
   "repository": {
     "type": "git",
     "url": "https://github.com/relateiq/spa-perf.git"
@@ -16,7 +16,6 @@
   "bugs": {
     "url": "https://github.com/relateiq/spa-perf/issues"
   },
-  "homepage": "https://github.com/relateiq/spa-perf",
   "dependencies": {},
   "iqproj": {
     "app": false
