@@ -326,6 +326,11 @@ function riqPerformanceNetworkHandler(url, promise) {
                 numTimeouts: timeline.totalTimeouts,
                 url: url
             };
+            if (riqPerformance.getNetworkDetail) {
+                var extraDetail = riqPerformance.getNetworkDetail.apply(this, arguments);
+                Object.assign(networkDetail, extraDetail);
+                Object.assign(startMark, extraDetail);
+            }
             //do this before adding marks
             currentTimeline = completeAjax(networkId);
             if (currentTimeline !== timeline) {
