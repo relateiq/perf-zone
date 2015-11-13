@@ -314,7 +314,9 @@ function riqPerformanceNetworkHandler(url, promise) {
     var entries = window.performance.getEntriesByType('Resource');
     //if these are about to get maxed we have to clear or we will lose resolution on the network timing
     if (entries.length >= 149) {
-        if (window.performance.webkitClearResourceTimings) {
+        if (window.performance.clearResourceTimings) {
+            window.performance.clearResourceTimings();
+        } else if (window.performance.webkitClearResourceTimings) {
             window.performance.webkitClearResourceTimings();
         }
         //TODO: other browsers?
