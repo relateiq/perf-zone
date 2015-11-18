@@ -103,7 +103,7 @@ function trackedInterval() {
                 type: 'interval'
             });
         }
-        origCb.apply(this, arguments);
+        origCb && origCb.apply(this, arguments);
 
     };
 
@@ -157,7 +157,7 @@ function trackedTimeout() {
         var prevId = currentParentTimeoutId;
         currentParentTimeoutCallback = origCb;
         currentParentTimeoutId = timeoutId;
-        origCb.apply(this, arguments);
+        origCb && origCb.apply(this, arguments);
         currentParentTimeoutCallback = prevParent;
         currentParentTimeoutCallback = prevId;
     };
