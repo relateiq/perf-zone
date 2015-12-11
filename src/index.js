@@ -33,7 +33,8 @@ function riqPerfEventCapture(e) {
 }
 
 function createTimelineFromTrigger(e) {
-    var tcs = e.target && getTcs(e.target);
+    var tcs = e.target && getParentTcs(e.target);
+
     var timeline = {
         id: ++timelineId,
         action: e.type,
@@ -214,18 +215,31 @@ function completeAsync(asyncId, timelineIdsByAsyncId) {
     return timeline;
 }
 
-
-
-function getTcs(node, tcs) {
-
+function getTcsFromElement(node, tcs) {
     tcs = tcs || [];
-    var thisTc = node.getAttribute && (node.getAttribute('tc') || node.getAttribute('class'));
+    var thisTc;
+    if (node.getAttribute) {
+        thisTc = node.getAttribute('tc') || node.getAttribute('class');
+    }
     if (thisTc) {
         tcs.push(thisTc);
     }
+    return tcs;
+}
+
+function getParentTcs(node, tcs) {
+    tcs = getTcsFromElement(node, tcs);
+    if (node.parentNode) {
+        return getParentTcs(node.parentNode, tcs);
+    }
+    return tcs;
+}
+
+function getChildTcs(node, tcs) {
+    tcs = getTcsFromElement(node, tcs);
     if (node.children && node.children.length) {
         Array.prototype.slice.call(node.children).forEach(function(child) {
-            getTcs(child, tcs);
+            getChildTcs(child, tcs);
         });
     }
     return tcs;
@@ -238,7 +252,7 @@ function tcMutationHandler(nodes) {
         if (timeline) {
             var tcs = [];
             nodes.forEach(function(node) {
-                getTcs(node, tcs);
+                getChildTcs(node, tcs);
             });
             var counts = {};
             tcs.forEach(function(tc) {
