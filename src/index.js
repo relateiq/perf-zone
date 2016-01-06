@@ -104,7 +104,7 @@ function trackedInterval() {
                 type: 'interval'
             });
         }
-        origCb && origCb.apply(this, arguments);
+        typeof origCb === 'function' && origCb.apply(this, arguments);
 
     };
 
@@ -158,7 +158,7 @@ function trackedTimeout() {
         var prevId = currentParentTimeoutId;
         currentParentTimeoutCallback = origCb;
         currentParentTimeoutId = timeoutId;
-        origCb && origCb.apply(this, arguments);
+        typeof origCb === 'function' && origCb.apply(this, arguments);
         currentParentTimeoutCallback = prevParent;
         currentParentTimeoutCallback = prevId;
     };
@@ -325,7 +325,7 @@ function riqPerformanceNetworkHandler(url, promise) {
     });
     incrementTimelineWait(timeline);
     networkIdToTimelineId[networkId] = timeline.id;
-    var entries = window.performance.getEntriesByType('Resource');
+    var entries = window.performance.getEntriesByType && window.performance.getEntriesByType('Resource') || [];
     //if these are about to get maxed we have to clear or we will lose resolution on the network timing
     if (entries.length >= 149) {
         if (window.performance.clearResourceTimings) {
@@ -355,7 +355,7 @@ function riqPerformanceNetworkHandler(url, promise) {
             var completionMark = riqPerformance.addMark(eventName, networkDetail);
             var resourceEntry;
             var entry;
-            var entries = window.performance.getEntriesByType('Resource');
+            var entries = window.performance.getEntriesByType && window.performance.getEntriesByType('Resource') || [];
             for (var i = entries.length - 1; i >= 0; i--) {
                 entry = entries[i];
                 //find the entry that started after we made the network request and shares its url
