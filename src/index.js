@@ -14,7 +14,7 @@ var waitingTimelinesById = {};
 var notWaitingTimelinesById = {};
 var timeoutIdChainCounts = {};
 var MAX_INTERVAL_COUNT = 10;
-var onTimelineComplete = function() {
+var onTimelineComplete = function () {
     //noop to prevent npes;
 };
 
@@ -46,7 +46,7 @@ function createTimelineFromTrigger(e) {
         numWaiting: 0
     };
     if (window.performance.memory) {
-        ['usedJSHeapSize', 'totalJSHeapSize', 'jsHeapSizeLimit'].forEach(function(key) {
+        ['usedJSHeapSize', 'totalJSHeapSize', 'jsHeapSizeLimit'].forEach(function (key) {
             timeline[key] = window.performance.memory[key] / 1000 / 1000;
         });
     }
@@ -70,7 +70,7 @@ function makeMark(name, detail, timestampOverride, timeline) {
         timelineStart: timeline.time_since_page_load
     };
     if (detail) {
-        Object.keys(detail, function(key) {
+        Object.keys(detail, function (key) {
             mark[key] = detail[key];
         });
     }
@@ -104,7 +104,9 @@ function trackedInterval() {
                 type: 'interval'
             });
         }
-        typeof origCb === 'function' && origCb.apply(this, arguments);
+        if (typeof origCb === 'function') {
+            origCb.apply(this, arguments);
+        }
 
     };
 
@@ -112,7 +114,7 @@ function trackedInterval() {
     var intervalId = riqPerformance.setInterval.apply(this, arguments);
     if (isLongInterval) { //long intervals we will assume are non terminating
         count = MAX_INTERVAL_COUNT + 1;
-        return;
+        return intervalId;
     }
     var timeline = getCurrentTimeline();
     if (timeline) {
@@ -120,6 +122,7 @@ function trackedInterval() {
         incrementTimelineWait(timeline);
         timeoutIdToTimelineId[intervalId] = timeline.id;
     }
+    return intervalId;
 }
 
 function checkTimeoutChainCount(timeoutId, parentId) {
@@ -238,7 +241,7 @@ function getParentTcs(node, tcs) {
 function getChildTcs(node, tcs) {
     tcs = getTcsFromElement(node, tcs);
     if (node.children && node.children.length) {
-        Array.prototype.slice.call(node.children).forEach(function(child) {
+        Array.prototype.slice.call(node.children).forEach(function (child) {
             getChildTcs(child, tcs);
         });
     }
@@ -251,11 +254,11 @@ function tcMutationHandler(nodes) {
         var timeline = getCurrentTimeline();
         if (timeline) {
             var tcs = [];
-            nodes.forEach(function(node) {
+            nodes.forEach(function (node) {
                 getChildTcs(node, tcs);
             });
             var counts = {};
-            tcs.forEach(function(tc) {
+            tcs.forEach(function (tc) {
                 var count = counts[tc];
                 if (!count) {
                     counts[tc] = 1;
@@ -264,7 +267,7 @@ function tcMutationHandler(nodes) {
                 }
             });
             tcs = [];
-            Object.keys(counts).forEach(function(tc) {
+            Object.keys(counts).forEach(function (tc) {
                 tcs.push(tc + ' ' + counts[tc]);
             });
             riqPerformance.addMark('render', {
@@ -290,7 +293,7 @@ function collectNodesFromMutation(mutation) {
 
 
 function maybeCompleteTimelines() {
-    Object.values(notWaitingTimelinesById).forEach(function(timeline) {
+    Object.values(notWaitingTimelinesById).forEach(function (timeline) {
         if (timeline && !isTimelineWaiting(timeline)) {
             if (riqPerformance.started && riqPerformance.onTimelineComplete) {
                 riqPerformance.onTimelineComplete(timeline);
@@ -305,7 +308,7 @@ function isTimelineWaiting(timeline) {
     return timeline.numWaiting > 0;
 }
 
-var componentObserver = new MutationObserver(function(mutations) {
+var componentObserver = new MutationObserver(function (mutations) {
     var nodes = angular.element.unique(mutations.map(collectNodesFromMutation).flatten(1));
     tcMutationHandler(nodes);
 });
@@ -337,7 +340,7 @@ function riqPerformanceNetworkHandler(url, promise) {
     }
 
     function getCallback(eventName) {
-        return function() {
+        return function () {
             var networkDetail = {
                 numTimeouts: timeline.totalTimeouts,
                 url: url
@@ -370,7 +373,7 @@ function riqPerformanceNetworkHandler(url, promise) {
                 }
             }
             if (resourceEntry) {
-                NETWORK_PROPS.forEach(function(networkProp) {
+                NETWORK_PROPS.forEach(function (networkProp) {
                     riqPerformance.addMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]);
                 });
             } else if (eventName !== 'network_error') { // TODO: only log this in debug mode
@@ -388,7 +391,7 @@ function riqPerformanceNetworkHandler(url, promise) {
 var riqPerformance = {
     start: function start(cb) {
         onTimelineComplete = cb || onTimelineComplete;
-        TRIGGER_EVENTS.forEach(function(type) {
+        TRIGGER_EVENTS.forEach(function (type) {
             document.body.addEventListener(type, riqPerfEventCapture, true);
         });
 
@@ -399,8 +402,8 @@ var riqPerformance = {
         });
         riqPerformance.started = true;
     },
-    stop: function() {
-        TRIGGER_EVENTS.forEach(function(type) {
+    stop: function () {
+        TRIGGER_EVENTS.forEach(function (type) {
             document.body.removeEventListener(type, riqPerfEventCapture);
         });
         componentObserver.disconnect();
@@ -425,13 +428,13 @@ var riqPerformance = {
     pageLoadTimestamp: new Date().getTime()
 };
 
-riqPerformance.popAllTimelines = function() {
+riqPerformance.popAllTimelines = function () {
     var popped = timelines;
     timelines = [];
     return popped;
 };
 
-riqPerformance.popAllMarks = function() {
+riqPerformance.popAllMarks = function () {
     var popped = marks;
     marks = [];
     return popped;
@@ -439,11 +442,11 @@ riqPerformance.popAllMarks = function() {
 
 
 var origXHR = window.XMLHttpRequest;
-window.XMLHttpRequest = function() {
+window.XMLHttpRequest = function () {
     var xhr = new origXHR(arguments[0]);
     var origOpen = xhr.open;
     var success, error;
-    var promise = new Promise(function(resolve, reject) {
+    var promise = new Promise(function (resolve, reject) {
         success = resolve;
         error = reject;
     });
