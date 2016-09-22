@@ -1,0 +1,12 @@
+{
+  "name": "bedrock",
+  "dependencies": {},
+  "devDependencies": {},
+  "globalDependencies": {
+    "angular": "github:DefinitelyTyped/DefinitelyTyped/angularjs/angular.d.ts#fa3294c560ee49f4af43e02a62e3f4b5b6bbe5e5",
+    "es6-shim": "github:DefinitelyTyped/DefinitelyTyped/es6-shim/es6-shim.d.ts#7de6c3dd94feaeb21f20054b9f30d5dabc5efabd",
+    "jquery": "github:DefinitelyTyped/DefinitelyTyped/jquery/jquery.d.ts#4cdfbe96b666eec5e1defbb519a62abf04e96764",
+    "node": "github:DefinitelyTyped/DefinitelyTyped/node/node.d.ts#1fa3e10e0175d352b149ccbca794c9438d702b4e",
+    "tape": "github:DefinitelyTyped/DefinitelyTyped/tape/tape.d.ts#7de6c3dd94feaeb21f20054b9f30d5dabc5efabd"
+  }
+}

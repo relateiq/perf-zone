@@ -6,9 +6,7 @@ headless.error
 headless.log
 node_modules
 
-.src/
-.app/
-release/
-typings/
+src/
+app/
 docker/public
 docker/start-server

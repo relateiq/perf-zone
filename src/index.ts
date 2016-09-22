@@ -1,41 +1,84 @@
+///<reference path="../typings/index.d.ts" />
+declare var require: NodeRequire;
+const flatten = require('lodash/flatten');
+const snakecase = require('lodash/snakecase');
+
+interface MemoryInfo{
+   usedJSHeapSize: number,
+   totalJSHeapSize: number,
+   jsHeapSizeLimit: number
+}
+
+interface Performance{
+    memory: MemoryInfo,
+    webkitClearResourceTimings : Function
+}
+
+interface RiqPerfMark{
+    timelineId: number,
+    name: string,
+    timestamp: number,
+    timelineStart: number
+}
+
+interface RiqPerfTimeline{
+    id: number,
+    action : string,
+    components : string[],
+    created_timestamp : number,
+    time_since_page_load : number,
+    totalTimeouts : number,
+    totalIntervals : number,
+    numWaiting : number
+}
+
+interface AsyncIdToTimelineIdMap{
+    [key: number]: number
+}
+
+interface TimelineMap{
+    [key: number]: RiqPerfTimeline
+}
+
+
 require('./performance-now');
-// these are polyfills for stupid phantomjs
-var timelineId = 0;
-var networkIdCount = 0;
+
+let timelineId = 0;
+let networkIdCount = 0;
 
 // current timeline should be set as the timeline that is associated with the latest js turn
-var currentTimeline;
-var lastEvent;
-var currentParentTimeoutCallback;
-var currentParentTimeoutId;
-var timeoutIdToTimelineId = {};
-var networkIdToTimelineId = {};
-var waitingTimelinesById = {};
-var notWaitingTimelinesById = {};
-var timeoutIdChainCounts = {};
-var MAX_INTERVAL_COUNT = 10;
-var onTimelineComplete = function () {
-    //noop to prevent npes;
-};
-
-var timelines = [];
-var marks = [];
-var TRIGGER_EVENTS = ['mousedown', 'keydown', 'mousewheel', 'mousemove'];
-var NETWORK_PROPS = ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd', 'requestStart', 'responseStart', 'responseEnd'];
+let currentTimeline : RiqPerfTimeline;
+let lastEvent : Event;
+let currentParentTimeoutCallback : Function;
+let currentParentTimeoutId : number;
+const timeoutIdToTimelineId : AsyncIdToTimelineIdMap = {};
+const networkIdToTimelineId : AsyncIdToTimelineIdMap = {};
+let waitingTimelinesById : TimelineMap = {};
+let notWaitingTimelinesById : TimelineMap = {};
+const timeoutIdChainCounts : {[key: number]: number} = {};
+const MAX_INTERVAL_COUNT = 10;
+var timelines : RiqPerfTimeline[] = [];
+var marks : RiqPerfMark[] = [];
+const TRIGGER_EVENTS = ['mousedown', 'keydown', 'mousewheel', 'mousemove'];
+const NETWORK_PROPS = ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd', 'requestStart', 'responseStart', 'responseEnd'];
 
 //other possible triggers resize, mutation observers, transition events, web workers
 
-function riqPerfEventCapture(e) {
+function riqPerfEventCapture(e : Event) {
     //if we didn't get dom manip the next user event will complete the prior timeline
     maybeCompleteTimelines();
     lastEvent = e;
     currentTimeline = null;
 }
 
-function createTimelineFromTrigger(e) {
-    var tcs = e.target && getParentTcs(e.target);
+function createTimelineFromTrigger(e : Event) {
+    var target = e.target;
+    let tcs : string[]
+    if(target instanceof Node){
+        tcs = getParentTcs(target);
+    }
 
-    var timeline = {
+    let timeline : RiqPerfTimeline = {
         id: ++timelineId,
         action: e.type,
         components: tcs,
@@ -62,15 +105,15 @@ function getCurrentTimeline() {
     return currentTimeline;
 }
 
-function makeMark(name, detail, timestampOverride, timeline) {
-    var mark = {
+function makeMark(name : string, detail : {[key: string]: any}, timestampOverride : number, timeline : RiqPerfTimeline) {
+    let mark : RiqPerfMark = {
         timelineId: timeline.id,
         name: name,
         timestamp: ((timestampOverride || window.performance.now()) - timeline.time_since_page_load),
         timelineStart: timeline.time_since_page_load
     };
     if (detail) {
-        Object.keys(detail, function (key) {
+        Object.keys(detail).forEach(function (key) {
             mark[key] = detail[key];
         });
     }
@@ -100,9 +143,7 @@ function trackedInterval() {
                 completeTimeout(intervalId);
             }
             //treat interval execution like an event so it will have it's own timeline and complete previous
-            riqPerfEventCapture({
-                type: 'interval'
-            });
+            riqPerfEventCapture(new CustomEvent('interval'));
         }
         if (typeof origCb === 'function') {
             origCb.apply(this, arguments);
@@ -153,9 +194,7 @@ function trackedTimeout() {
             currentTimeline = completeTimeout(timeoutId);
         } else {
             console.log('got timeout setting same callback within callback. treating it like an interval');
-            riqPerfEventCapture({
-                type: 'pseudo_interval'
-            });
+            riqPerfEventCapture(new CustomEvent('pseudo_interval'));
         }
         var prevParent = currentParentTimeoutCallback;
         var prevId = currentParentTimeoutId;
@@ -163,7 +202,7 @@ function trackedTimeout() {
         currentParentTimeoutId = timeoutId;
         typeof origCb === 'function' && origCb.apply(this, arguments);
         currentParentTimeoutCallback = prevParent;
-        currentParentTimeoutCallback = prevId;
+        currentParentTimeoutId = prevId;
     };
 
     var timeoutId = riqPerformance.setTimeout.apply(this, arguments);
@@ -218,10 +257,10 @@ function completeAsync(asyncId, timelineIdsByAsyncId) {
     return timeline;
 }
 
-function getTcsFromElement(node, tcs) {
+function getTcsFromNode(node : Node, tcs? : string[]) {
     tcs = tcs || [];
-    var thisTc;
-    if (node.getAttribute) {
+    let thisTc;
+    if (node instanceof Element) {
         thisTc = node.getAttribute('tc') || node.getAttribute('class');
     }
     if (thisTc) {
@@ -230,18 +269,18 @@ function getTcsFromElement(node, tcs) {
     return tcs;
 }
 
-function getParentTcs(node, tcs) {
-    tcs = getTcsFromElement(node, tcs);
+function getParentTcs(node : Node, tcs? : string[]) {
+    tcs = getTcsFromNode(node, tcs);
     if (node.parentNode) {
         return getParentTcs(node.parentNode, tcs);
     }
     return tcs;
 }
 
-function getChildTcs(node, tcs) {
-    tcs = getTcsFromElement(node, tcs);
-    if (node.children && node.children.length) {
-        Array.prototype.slice.call(node.children).forEach(function (child) {
+function getChildTcs(node : Node, tcs? : string[]) {
+    tcs = getTcsFromNode(node, tcs);
+    if (node.childNodes && node.childNodes.length) {
+        Array.prototype.slice.call(node.childNodes).forEach(function (child) {
             getChildTcs(child, tcs);
         });
     }
@@ -293,7 +332,8 @@ function collectNodesFromMutation(mutation) {
 
 
 function maybeCompleteTimelines() {
-    Object.values(notWaitingTimelinesById).forEach(function (timeline) {
+    Object.keys(notWaitingTimelinesById).forEach(function (timelineId) {
+        let timeline = notWaitingTimelinesById[timelineId];
         if (timeline && !isTimelineWaiting(timeline)) {
             if (riqPerformance.started && riqPerformance.onTimelineComplete) {
                 riqPerformance.onTimelineComplete(timeline);
@@ -309,7 +349,7 @@ function isTimelineWaiting(timeline) {
 }
 
 var componentObserver = new MutationObserver(function (mutations) {
-    var nodes = angular.element.unique(mutations.map(collectNodesFromMutation).flatten(1));
+    var nodes = angular.element.unique(flatten(mutations.map(collectNodesFromMutation)));
     tcMutationHandler(nodes);
 });
 
@@ -345,8 +385,9 @@ function riqPerformanceNetworkHandler(url, promise) {
                 numTimeouts: timeline.totalTimeouts,
                 url: url
             };
-            if (riqPerformance.getNetworkDetail) {
-                var extraDetail = riqPerformance.getNetworkDetail.apply(this, arguments);
+            var networkDetailCB = riqPerformance['getNetworkDetail'];
+            if (networkDetailCB instanceof Function) {
+                var extraDetail = networkDetailCB.apply(this, arguments);
                 Object.assign(networkDetail, extraDetail);
                 Object.assign(startMark, extraDetail);
             }
@@ -374,7 +415,7 @@ function riqPerformanceNetworkHandler(url, promise) {
             }
             if (resourceEntry) {
                 NETWORK_PROPS.forEach(function (networkProp) {
-                    riqPerformance.addMark('network_' + networkProp.underscore(), networkDetail, resourceEntry[networkProp]);
+                    riqPerformance.addMark('network_' + snakecase(networkProp), networkDetail, resourceEntry[networkProp]);
                 });
             } else if (eventName !== 'network_error') { // TODO: only log this in debug mode
                 console.log('could not find entry for ' + url + ' that started after we sent the request');
@@ -389,8 +430,12 @@ function riqPerformanceNetworkHandler(url, promise) {
 }
 
 var riqPerformance = {
-    start: function start(cb) {
-        onTimelineComplete = cb || onTimelineComplete;
+    onTimelineComplete : function (timeline: RiqPerfTimeline) {
+          //noop to prevent npes
+    },
+    started : false,
+    start: function start(cb? : (timeline: RiqPerfTimeline) => void) {
+        riqPerformance.onTimelineComplete = cb || riqPerformance.onTimelineComplete;
         TRIGGER_EVENTS.forEach(function (type) {
             document.body.addEventListener(type, riqPerfEventCapture, true);
         });
@@ -417,7 +462,7 @@ var riqPerformance = {
     clearTimeout: window.clearTimeout,
     setInterval: window.setInterval,
     clearInterval: window.clearInterval,
-    addMark: function addMark(name, detail, timestampOverride) {
+    addMark: function addMark(name : string, detail : {[key : string] : any}, timestampOverride? : number) {
         var timeline = getCurrentTimeline();
         if (timeline) {
             var mark = makeMark.call(this, name, detail, timestampOverride, timeline);
@@ -425,24 +470,22 @@ var riqPerformance = {
             return mark;
         }
     },
-    pageLoadTimestamp: new Date().getTime()
+    pageLoadTimestamp: new Date().getTime(),
+    popAllTimelines : function () {
+        var popped = timelines;
+        timelines = [];
+        return popped;
+    },
+    popAllMarks : function () {
+        var popped = marks;
+        marks = [];
+        return popped;
+    }
 };
 
-riqPerformance.popAllTimelines = function () {
-    var popped = timelines;
-    timelines = [];
-    return popped;
-};
 
-riqPerformance.popAllMarks = function () {
-    var popped = marks;
-    marks = [];
-    return popped;
-};
-
-
-var origXHR = window.XMLHttpRequest;
-window.XMLHttpRequest = function () {
+var origXHR : { new(...args: any[]): XMLHttpRequest } = window['XMLHttpRequest'];
+window['XMLHttpRequest'] = function () {
     var xhr = new origXHR(arguments[0]);
     var origOpen = xhr.open;
     var success, error;
@@ -467,15 +510,12 @@ window.clearTimeout = trackedClearTimeout;
 window.setInterval = trackedInterval;
 window.clearInterval = trackedClearInterval;
 
-lastEvent = {
-    type: 'page_load'
-};
+lastEvent = new CustomEvent('page_load');
 
 riqPerformance.start(); //start by default to not miss events
 
 module.exports = riqPerformance;
 //FOR DEBUGGING ONLY
 if (window) {
-    window.riqPerformance = riqPerformance;
-
+    window['riqPerformance'] = riqPerformance;
 }
