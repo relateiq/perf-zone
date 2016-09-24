@@ -1,0 +1,19 @@
+<div>
+<input type="number" ng-model="$ctrl.timeoutDelay"/> The delay for either interval or timeout <br/><br/>
+<button ng-click="$ctrl.initInterval()">Init Interval</button> Starts an interval that adds a div on set and on each exec of the callback <br/><br/>
+<button ng-click="$ctrl.initTimeout()">Init Timeout</button> Sets a timeout that adds a div on set and on the exec of the callback <br/><br/>
+<button ng-click="$ctrl.initLoopingTimeout()">Init Looping Timeout</button> Sets a recursive timeout that adds a div on set and on each exec <br/><br/>
+<button ng-click="$ctrl.clickToRenderADiv()">clickToRenderADiv</button> Adds a div on click.. <br/><br/>
+<button ng-click="$ctrl.clickToRenderADivAndFocus()">clickToRenderADiv and focus text box</button> Focus the text box before adding a div. If we listen for focus events this results in the render being attributed to the focus rather than the click as it should be<br/><br/>
+<button ng-click="$ctrl.clickToRenderADivAndVanish($event)">clickToRenderADiv and vanish</button> Adds a div and removes the button (the target). This currently results in the component chain having only the target value <br/><br/>
+<button ng-click="$ctrl.myAttribute = $ctrl.myAttribute + 'boop'" my-attribute="{{$ctrl.myAttribute}}" tc="change_attribute_button">Click to Change My Attribute</button> modifies an attribute on this button <br/><br/>
+<button ng-click="$ctrl.treeAttribute = $ctrl.treeAttribute + 'boop'" tc="change_tree_attribute_button">Click to Change a tree of Attributes</button> modifies the attributes of an invisble dom tree to see what mutations look like<br/><br/>
+<button onClick="event.srcElement.textContent = event.srcElement.textContent + ' 1'" tc="change_text_button">Click to Change My Text</button> changes it's own text on click <br/><br/>
+<button ng-click="$ctrl.clickToRenderADiv('click')" ng-mouseenter="$ctrl.clickToRenderADiv('hover')">Click and Hover</button> adds a div on hover as well as on click<br/><br/>
+<br/>
+<button ng-click="$ctrl.logTimelines()">Log Timelines</button>
+<div class="root-node-attribute-tree" my-attribute="{{$ctrl.treeAttribute}}">
+    <div class="sub-node-attribute-tree" my-attribute="{{$ctrl.treeAttribute}}"></div>
+</div>
+
+</div>

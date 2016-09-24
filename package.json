@@ -16,6 +16,12 @@
   "bugs": {
     "url": "https://github.com/relateiq/spa-perf/issues"
   },
+  "browserify-shim": {},
+  "browserify": {
+    "transform": [
+      "riq-partialify"
+    ]
+  },
   "dependencies": {
     "lodash": "~4.16.1"
   },

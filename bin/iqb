@@ -187,6 +187,7 @@ case $command in
   "assets")
     setopt null_glob
     [ -n "$(echo assets/*)" ] && cp -R assets release
+    cp -R node_modules/uiq/src/assets release
     unsetopt null_glob
     ;;
 
