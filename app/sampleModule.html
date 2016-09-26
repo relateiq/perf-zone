@@ -10,6 +10,10 @@
 <button ng-click="$ctrl.treeAttribute = $ctrl.treeAttribute + 'boop'" tc="change_tree_attribute_button">Click to Change a tree of Attributes</button> modifies the attributes of an invisble dom tree to see what mutations look like<br/><br/>
 <button onClick="event.srcElement.textContent = event.srcElement.textContent + ' 1'" tc="change_text_button">Click to Change My Text</button> changes it's own text on click <br/><br/>
 <button ng-click="$ctrl.clickToRenderADiv('click')" ng-mouseenter="$ctrl.clickToRenderADiv('hover')">Click and Hover</button> adds a div on hover as well as on click<br/><br/>
+<button ng-click="$ctrl.clickToSendNetworkRequest()" >clickToSendNetworkRequest</button>sends a network request<br/><br/>
+<button ng-click="$ctrl.clickToSendCachedNetworkRequest()" >clickToSendCachedNetworkRequest</button>sends a network request that should return 304<br/><br/>
+<button ng-click="$ctrl.clickToSendFailedNetworkRequest()" >clickToSendFailedNetworkRequest</button>sends a bad network request<br/><br/>
+<button ng-click="$ctrl.clickToBoardTheCrazyChain()" >clickToBoardTheCrazyChain</button>.......<br/><br/>
 <br/>
 <button ng-click="$ctrl.logTimelines()">Log Timelines</button>
 <div class="root-node-attribute-tree" my-attribute="{{$ctrl.treeAttribute}}">

@@ -423,11 +423,11 @@ function riqPerformanceNetworkHandler(url, promise) {
             for (let i = entries.length - 1; i >= 0; i--) {
                 const entry = entries[i];
                 //find the entry that started after we made the network request and shares its url
-                if (entry.name.has(url)) {
+                if (entry.name.indexOf(url) != -1) {
                     const startTime = startMark.timestamp + startMark.timelineStart;
-                    if (entry.domainLookupStart > startTime) {
+                    if (entry.startTime > startTime) {
                         //get the closest entry to our timeline start in case there have been more since
-                        if (!resourceEntry || resourceEntry.domainLookupStart - startTime > entry.domainLookupStart - startTime) {
+                        if (!resourceEntry || (resourceEntry.startTime - startTime > entry.startTime - startTime)) {
                             resourceEntry = entry;
                         }
                     }
@@ -519,7 +519,15 @@ window['XMLHttpRequest'] = function() {
         riqPerformanceNetworkHandler(url, promise);
         return origOpen.apply(this, arguments);
     };
-    xhr.addEventListener('load', success);
+    xhr.addEventListener('load', function(e) {
+        var status = e.target && e.target.status || 0;
+        // 304 never makes it here because the browser turns it into 200 for some reason but just in case...
+        if (200 <= status && status < 300 || status === 304) {
+            success.apply(this, arguments);
+        } else {
+            error.apply(this, arguments);
+        }
+    });
     xhr.addEventListener('abort', error);
     xhr.addEventListener('error', error);
     return xhr;
