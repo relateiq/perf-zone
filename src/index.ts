@@ -337,19 +337,24 @@ function incrementCountForNode(mutationCounts: { [key: string]: number }, node: 
 }
 
 function maybeReconstructTcsFromMutations(timeline, mutations) {
+    if (!timeline.targetLastParent) {
+        return;
+    }
+    let idUniqueToThisFn = 1;
+    var lastParentToMutationTarget = mutations.reduce(function(map, mutation) {
+        for (var i = 0; i < mutation.removedNodes.length; ++i) {
+            let removedNode = mutation.removedNodes[i];
+            removedNode._perfElementId = idUniqueToThisFn++;
+            map[removedNode._perfElementId] = mutation.target;
+        }
+        return map;
+    }, {})
+
     // if this is the mutation that contained our removed target
     let lastParent = undefined;
     while (timeline.targetLastParent && lastParent !== timeline.targetLastParent) {
         lastParent = timeline.targetLastParent;
-        mutations = mutations.filter(function(mutation) {
-            if (mutation.removedNodes[0] === timeline.targetLastParent) {
-                // use the mutation's target to get the rest of the tcs
-                addTcsToTimeline(timeline, mutation.target, false);
-                return false;
-            }
-            return mutation.removedNodes.length;
-        });
-
+        addTcsToTimeline(timeline, lastParentToMutationTarget[timeline.targetLastParent._perfElementId], false);
     }
 }
 

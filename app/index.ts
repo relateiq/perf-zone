@@ -129,6 +129,7 @@ angular.module('SampleModule', [])
                     for (let j = 0; j < children.length; j++) {
                         newDiv.appendChild(children[j]);
                     }
+                    vanishContainer.appendChild(document.createElement('div'));
                     vanishContainer.appendChild(newDiv);
                 }
                 angular.element('.js-vanish-container button').click(ctrl.clickToRenderADivAndVanish);
