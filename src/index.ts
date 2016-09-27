@@ -70,23 +70,36 @@ function riqPerfEventCapture(e: Event) {
     currentTimeline = null;
 }
 
+function addTcsToTimeline(timeline, target, useTextForFirst) {
+    if (target instanceof Node) {
+        let tcInfo = getParentTcs(target, undefined, useTextForFirst);
+        timeline.components = timeline.components.concat(tcInfo.tcs);
+        if (tcInfo.parentNode !== document.body) {
+            // our target had been removed from the dom during the event execution
+            timeline.targetLastParent = tcInfo.parentNode;
+        } else {
+            timeline.targetLastParent = undefined;
+        }
+    }
+}
+
 function createTimelineFromTrigger(e: Event) {
     const target = e.target;
-    let tcs: string[]
-    if (target instanceof Node) {
-        tcs = getParentTcs(target, undefined, true);
-    }
+
 
     let timeline: RiqPerfTimeline = {
         id: ++timelineId,
         action: e.type,
-        components: tcs,
+        components: [],
         created_timestamp: Date.now(),
         time_since_page_load: window.performance.now(),
         totalTimeouts: 0,
         totalIntervals: 0,
         numWaiting: 0
     };
+
+    addTcsToTimeline(timeline, target, true);
+
     if (window.performance.memory) {
         ['usedJSHeapSize', 'totalJSHeapSize', 'jsHeapSizeLimit'].forEach(function(key) {
             timeline[key] = window.performance.memory[key] / 1000 / 1000;
@@ -239,7 +252,10 @@ function getParentTcs(node: Node, tcs?: string[], useTextForFirst?: boolean) {
     if (node.parentNode) {
         return getParentTcs(node.parentNode, tcs);
     }
-    return tcs;
+    return {
+        tcs: tcs,
+        parentNode: node
+    };
 }
 
 function getChildTcs(node: Node, tcs?: string[]) {
@@ -320,6 +336,23 @@ function incrementCountForNode(mutationCounts: { [key: string]: number }, node: 
     });
 }
 
+function maybeReconstructTcsFromMutations(timeline, mutations) {
+    // if this is the mutation that contained our removed target
+    let lastParent = undefined;
+    while (timeline.targetLastParent && lastParent !== timeline.targetLastParent) {
+        lastParent = timeline.targetLastParent;
+        mutations = mutations.filter(function(mutation) {
+            if (mutation.removedNodes[0] === timeline.targetLastParent) {
+                // use the mutation's target to get the rest of the tcs
+                addTcsToTimeline(timeline, mutation.target, false);
+                return false;
+            }
+            return mutation.removedNodes.length;
+        });
+
+    }
+}
+
 // experimental..
 function createRenderMarksForMutations(mutations: MutationRecord[]) {
     if (!mutations.length) {
@@ -342,6 +375,8 @@ function createRenderMarksForMutations(mutations: MutationRecord[]) {
         }
         return mutationCounts;
     }, {});
+
+    maybeReconstructTcsFromMutations(timeline, mutations);
     var tcs = Object.keys(counts).map(function(tc: string) {
         return tc + ' ' + counts[tc];
     });

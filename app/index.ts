@@ -112,8 +112,26 @@ angular.module('SampleModule', [])
 
                 ctrl.clickToRenderADivAndVanish = function(e) {
                     ctrl.clickToRenderADiv();
-                    angular.element(e.target).remove();
+                    var vanishContainer = angular.element('.js-vanish-container');
+                    vanishContainer.remove();
+                    let child = vanishContainer;
+                    while (child.length) {
+                        child = vanishContainer.find('div,button');
+                        child.remove();
+                    }
                 };
+                let numNestedVanish = 1000;
+                let vanishContainer = angular.element('.js-vanish-container')[0];
+                for (let i = 0; i < numNestedVanish; i++) {
+                    let newDiv = angular.element('<div class="js-vanish-nest' + i + '"/>')[0];
+                    var children = Array.prototype.slice.call(vanishContainer.childNodes);
+
+                    for (let j = 0; j < children.length; j++) {
+                        newDiv.appendChild(children[j]);
+                    }
+                    vanishContainer.appendChild(newDiv);
+                }
+                angular.element('.js-vanish-container button').click(ctrl.clickToRenderADivAndVanish);
 
                 ctrl.clickToSendNetworkRequest = function() {
                     var config = {
