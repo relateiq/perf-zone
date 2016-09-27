@@ -509,14 +509,32 @@ const origXHR: { new (...args: any[]): XMLHttpRequest } = window['XMLHttpRequest
 window['XMLHttpRequest'] = function() {
     const xhr = new origXHR(arguments[0]);
     const origOpen = xhr.open;
-    let success, error;
+    let promiseResolve, promiseReject;
     const promise = new Promise(function(resolve, reject) {
-        success = resolve;
-        error = reject;
+        promiseResolve = resolve;
+        promiseReject = reject;
     });
+
+    function success() {
+        if (!riqPerformance.started) {
+            return;
+        }
+        promiseResolve.apply(this, arguments);
+    }
+
+    function error() {
+        if (!riqPerformance.started) {
+            return;
+        }
+        promiseReject.apply(this, arguments);
+    }
+
+
     xhr.open = function riqPerfXhrOpen() {
         const url = arguments[1];
-        riqPerformanceNetworkHandler(url, promise);
+        if (riqPerformance.started) {
+            riqPerformanceNetworkHandler(url, promise);
+        }
         return origOpen.apply(this, arguments);
     };
     xhr.addEventListener('load', function(e) {
