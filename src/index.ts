@@ -268,49 +268,6 @@ function getChildTcs(node: Node, tcs?: string[]) {
     return tcs;
 }
 
-function createRenderMarkForNodes(nodes: Node[]) {
-    if (nodes.length) {
-        //it really shouldn't be possible not to have one of these but in tests it is so null check to be safe
-        const timeline = getCurrentTimeline();
-        if (timeline) {
-            let tcs = [];
-            nodes.forEach(function(node) {
-                getChildTcs(node, tcs);
-            });
-            const counts = {};
-            tcs.forEach(function(tc) {
-                const count = counts[tc];
-                if (!count) {
-                    counts[tc] = 1;
-                } else {
-                    counts[tc] = count + 1;
-                }
-            });
-            tcs = [];
-            Object.keys(counts).forEach(function(tc) {
-                tcs.push(tc + ' ' + counts[tc]);
-            });
-            riqPerformance.addMark('render', {
-                componenent_list: tcs,
-                numTimeouts: timeline.totalTimeouts
-            });
-        }
-    }
-}
-
-function collectNodesFromMutation(mutation: MutationRecord) {
-    let result = [];
-    switch (mutation.type) {
-        case 'attributes':
-            result.push(mutation.target);
-            break;
-        case 'childList':
-            result.concat(mutation.addedNodes).concat(mutation.removedNodes);
-            break;
-    }
-    return result;
-}
-
 function maybeIncrementMutationCount(counts: { [key: string]: number }, tc: string, type: string) {
     if (!tc) {
         return;
@@ -358,7 +315,6 @@ function maybeReconstructTcsFromMutations(timeline, mutations) {
     }
 }
 
-// experimental..
 function createRenderMarksForMutations(mutations: MutationRecord[]) {
     if (!mutations.length) {
         return;
@@ -386,15 +342,13 @@ function createRenderMarksForMutations(mutations: MutationRecord[]) {
         return tc + ' ' + counts[tc];
     });
     riqPerformance.addMark('render', {
-        componenent_list: tcs,
+        components: tcs,
         numTimeouts: timeline.totalTimeouts
     });
 }
 
 const componentObserver = new MutationObserver(function(mutations: MutationRecord[]) {
     createRenderMarksForMutations(mutations);
-    // const nodes = unique(flatten(mutations.map(collectNodesFromMutation)));
-    // createRenderMarkForNodes(nodes);
 });
 
 function maybeCompleteTimelines() {
