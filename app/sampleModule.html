@@ -14,7 +14,7 @@
 <button ng-click="$ctrl.clickToRenderADiv('click')" ng-mouseenter="$ctrl.clickToRenderADiv('hover')">Click and Hover</button> adds a div on hover as well as on click<br/><br/>
 <button ng-click="$ctrl.clickToSendNetworkRequest()" >clickToSendNetworkRequest</button>sends a network request<br/><br/>
 <button ng-click="$ctrl.clickToSendCachedNetworkRequest()" >clickToSendCachedNetworkRequest</button>sends a network request that should return 304<br/><br/>
-<button ng-click="$ctrl.clickToSendFailedNetworkRequest()" >clickToSendFailedNetworkRequest</button>sends a bad network request<br/><br/>
+<button ng-click="$ctrl.clickToSendFailedNetworkRequest()" >clickToSendFailedNetworkRequest</button>sends a bad network request<br/><br/><button ng-click="$ctrl.clickToSendNetworkRequestsBlockedByTooManyParallel()" >clickToSendNetworkRequestsBlockedByTooManyParallel</button>sends enough network request to force queueing<br/><br/>
 <button ng-click="$ctrl.clickToSendNetworkRequestBlockedByJsExecution()" >clickToSendNetworkRequestBlockedByJsExecution</button>sends a network request whose result callback is blocked for a little bit by js execution. it's very worth noting that if there is js execution blocking the thread when the browser would normally execute the XHR callback, this will be reflected in the difference between the browsers responseEnd timestamp and our NETWORK_SUCCESS timestamp<br/><br/>
 <button ng-click="$ctrl.clickToBoardTheCrazyChain()" >clickToBoardTheCrazyChain</button>.......<br/><br/>
 <br/>

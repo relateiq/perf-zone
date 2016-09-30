@@ -27,12 +27,42 @@ function logTimelines() {
     }
     changedTimelineIds.forEach(function(timelineId) {
         var timeline = timelineMap[timelineId];
-        timeline.marks = timeline.marks.sort(function (mark1, mark2) {
+        timeline.marks = timeline.marks.sort(function(mark1, mark2) {
             return mark1.timestamp - mark2.timestamp;
         });
         logTimeline(timeline);
     });
 };
+
+function analyzeTimeline(timeline) {
+    if (timeline.action === 'page_load') {
+        return {};
+    }
+    var time = timeline.marks.reduce(function(map, mark) {
+        if (mark.name === 'render' ||
+            mark.name === 'network_send' ||
+            mark.name === 'timeout_callback_done' ||
+            mark.name === 'interval_callback_done') {
+            map.js += mark.timestamp - map.lastJSStart;
+            map.lastJSStart = mark.timestamp;
+            map.total = mark.name === 'render' && mark.timestamp || map.total;
+        }
+
+        // things that begin js turns belonging to this timeline
+        if (mark.name === 'network_response_end' ||
+            mark.name === 'network_error') {
+            map.network += mark.timestamp - map.lastJSStart;
+            map.lastJSStart = mark.timestamp;
+        }
+        if (mark.name === 'timeout_callback' ||
+            mark.name === 'interval_callback') {
+            map.timeouts += mark.timestamp - map.lastJSStart;
+            map.lastJSStart = mark.timestamp;
+        }
+        return map;
+    }, { lastJSStart: 0, js: 0, network: 0, timeouts: 0 });
+    return time;
+}
 
 function logTimeline(timeline) {
     if (timeline.action === 'page_load') {
@@ -76,6 +106,13 @@ function logTimeline(timeline) {
         'trigger components',
         timeline.components
     );
+
+    var times = analyzeTimeline(timeline);
+    console.log('total js execution: ', times.js);
+    console.log('total network wait: ', times.network);
+    console.log('total timeout wait: ', times.timeouts);
+    console.log('total time (to last render): ', times.total);
+    console.log('total sum: ', times.js + times.network + times.timeouts);
 }
 
 module.exports = { logTimelines, logTimeline };

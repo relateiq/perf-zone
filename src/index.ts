@@ -15,6 +15,10 @@ interface Performance {
     webkitClearResourceTimings: Function
 }
 
+interface XMLHttpRequest {
+    responseURL: string
+}
+
 interface RiqPerfMark {
     timelineId: number,
     name: string,
@@ -50,6 +54,7 @@ let networkIdCount = 0;
 // current timeline should be set as the timeline that is associated with the latest js turn
 let currentTimeline: RiqPerfTimeline;
 let lastEvent: Event;
+let lastEventTimestamp: number;
 const timeoutIdToTimelineId: AsyncIdToTimelineIdMap = {};
 const networkIdToTimelineId: AsyncIdToTimelineIdMap = {};
 let waitingTimelinesById: TimelineMap = {};
@@ -67,6 +72,7 @@ function riqPerfEventCapture(e: Event) {
     //if we didn't get dom manip the next user event will complete the prior timeline
     maybeCompleteTimelines();
     lastEvent = e;
+    lastEventTimestamp = window.performance.now();
     currentTimeline = null;
 }
 
@@ -83,7 +89,7 @@ function addTcsToTimeline(timeline, target, useTextForFirst) {
     }
 }
 
-function createTimelineFromTrigger(e: Event) {
+function createTimelineFromTrigger(e: Event, lastEventTimestamp: number) {
     const target = e.target;
 
 
@@ -92,7 +98,7 @@ function createTimelineFromTrigger(e: Event) {
         action: e.type,
         components: [],
         created_timestamp: Date.now(),
-        time_since_page_load: window.performance.now(),
+        time_since_page_load: lastEventTimestamp,
         totalTimeouts: 0,
         totalIntervals: 0,
         numWaiting: 0
@@ -111,8 +117,9 @@ function createTimelineFromTrigger(e: Event) {
 
 function getCurrentTimeline() {
     if (!currentTimeline && lastEvent) {
-        currentTimeline = createTimelineFromTrigger(lastEvent);
+        currentTimeline = createTimelineFromTrigger(lastEvent, lastEventTimestamp);
         lastEvent = null;
+        lastEventTimestamp = null;
     }
     return currentTimeline;
 }
@@ -148,9 +155,11 @@ function trackedInterval() {
     arguments[0] = function riqPerfTrackedIntervalCallback() {
         // treat interval execution like an event so it will have it's own timeline and complete previous
         currentTimeline = waitingTimelinesById[timeoutIdToTimelineId[intervalId]];
+        riqPerformance.addMark('interval_callback');
         if (typeof origCb === 'function') {
             origCb.apply(this, arguments);
         }
+        riqPerformance.addMark('interval_callback_done');
     };
     const intervalId = riqPerformance.setInterval.apply(this, arguments);
     const timeline = getCurrentTimeline();
@@ -170,9 +179,11 @@ function trackedTimeout() {
 
     arguments[0] = function riqPerfTrackedTimeoutCallback() {
         currentTimeline = completeTimeout(timeoutId);
+        riqPerformance.addMark('timeout_callback');
         if (typeof origCb === 'function') {
             origCb.apply(this, arguments);
         };
+        riqPerformance.addMark('timeout_callback_done');
     };
 
     const timeoutId = riqPerformance.setTimeout.apply(this, arguments);
@@ -395,11 +406,14 @@ function riqPerformanceNetworkHandler(url, promise) {
     }
 
     function getCallback(eventName) {
-        return function() {
+        return function(e: ProgressEvent) {
             let networkDetail = {
                 numTimeouts: timeline.totalTimeouts,
                 url: url
             };
+            var responseURL = e.target && (<XMLHttpRequest>e.target).responseURL;
+            var lookupUrl = responseURL || url;
+
             const networkDetailCB = riqPerformance['getNetworkDetail'];
             if (networkDetailCB instanceof Function) {
                 let extraDetail = networkDetailCB.apply(this, arguments);
@@ -417,7 +431,7 @@ function riqPerformanceNetworkHandler(url, promise) {
             for (let i = entries.length - 1; i >= 0; i--) {
                 const entry = entries[i];
                 //find the entry that started after we made the network request and shares its url
-                if (entry.name.indexOf(url) != -1) {
+                if (entry.name.indexOf(lookupUrl) !== -1) {
                     const startTime = startMark.timestamp + startMark.timelineStart;
                     if (entry.startTime > startTime) {
                         //get the closest entry to our timeline start in case there have been more since
@@ -431,7 +445,7 @@ function riqPerformanceNetworkHandler(url, promise) {
                 NETWORK_PROPS.forEach(function(networkProp) {
                     // only add marks for parts of the timing that actually have a value
                     var timeStamp = resourceEntry[networkProp];
-                    if(timeStamp){ // 0 absolutely counts as not having a value
+                    if (timeStamp) { // 0 absolutely counts as not having a value
                         riqPerformance.addMark('network_' + snakecase(networkProp), networkDetail, timeStamp);
                     }
                 });
@@ -533,13 +547,14 @@ window['XMLHttpRequest'] = function() {
         if (riqPerformance.started) {
             riqPerformanceNetworkHandler(url, promise);
         }
-        return origOpen.apply(this, arguments);
+        var openResult = origOpen.apply(this, arguments);
+        return openResult;
     };
     xhr.addEventListener('load', function(e) {
-        if(!e.target){
+        if (!e.target) {
             return;
         }
-        var status =  (<XMLHttpRequest> e.target).status || 0;
+        var status = (<XMLHttpRequest>e.target).status || 0;
         // 304 never makes it here because the browser turns it into 200 for some reason but just in case...
         if (200 <= status && status < 300 || status === 304) {
             success.apply(this, arguments);
@@ -558,7 +573,7 @@ window.clearTimeout = trackedClearTimeout;
 window.setInterval = trackedInterval;
 window.clearInterval = trackedClearInterval;
 
-lastEvent = new CustomEvent('page_load');
+riqPerfEventCapture(new CustomEvent('page_load'));
 
 riqPerformance.start(); //start by default to not miss events
 

@@ -194,16 +194,45 @@ angular.module('SampleModule', [])
                     });
                 };
 
-                ctrl.clickToSendNetworkRequestBlockedByJsExecution = function () {
+                ctrl.clickToSendNetworkRequestBlockedByJsExecution = function() {
                     $http({ method: 'get', url: 'https://httpbin.org/get' }).then(function() {
                         ctrl.clickToRenderADiv('blocked network success');
+
+                        setTimeout(function() {
+                            for (var i = 0; i < 100000000; i++) {
+                                var doingThings = "things" + i;
+                                doingThings += "to waste time";
+                            }
+                        }, 1);
+
                     });
-                    setTimeout(function () {
-                        for(var i = 0; i < 10000000; i++){
+
+                    $http({ method: 'get', url: 'https://httpbin.org/delay/1?second=true' }).then(function() {
+                        ctrl.clickToRenderADiv('2nd blocked network success');
+                    });
+
+                    setTimeout(function() {
+                        for (var i = 0; i < 10000000; i++) {
                             var doingThings = "things" + i;
                             doingThings += "to waste time";
                         }
-                    }, 1);
+                    }, 1)
+                };
+
+                ctrl.clickToSendNetworkRequestsBlockedByTooManyParallel = function() {
+                    var MAX_PARALLEL_CHROME = 6;
+                    for (let i = 0; i < MAX_PARALLEL_CHROME + 1; i++) {
+                        $http({
+                            method: 'get',
+                            url: 'https://' +
+                            // uncomment to verify that even added a www allows more parallel requests
+                            // (i >= MAX_PARALLEL_CHROME ? 'www.' : '') +
+
+                            'httpbin.org/delay/1?nth=' + i
+                        }).then(function() {
+                            ctrl.clickToRenderADiv(i + 'blocked network success');
+                        });
+                    }
                 };
 
                 ctrl.logTimelines = logTimelines.logTimelines;
