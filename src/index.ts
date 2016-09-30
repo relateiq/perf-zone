@@ -59,7 +59,7 @@ let timelines: RiqPerfTimeline[] = [];
 let marks: RiqPerfMark[] = [];
 
 const TRIGGER_EVENTS = ['keydown', 'keypress', 'keyup', 'mousedown', 'mouseup', 'click', 'dblclick', 'mousemove', 'mouseover', 'mousewheel', 'mouseout', 'resize', 'scroll'];
-const NETWORK_PROPS = ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd', 'requestStart', 'responseStart', 'responseEnd'];
+const NETWORK_PROPS = ['startTime', 'fetchStart', 'domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd', 'requestStart', 'responseStart', 'responseEnd'];
 
 //other possible triggers resize, mutation observers, transition events, web workers
 
@@ -429,7 +429,11 @@ function riqPerformanceNetworkHandler(url, promise) {
             }
             if (resourceEntry) {
                 NETWORK_PROPS.forEach(function(networkProp) {
-                    riqPerformance.addMark('network_' + snakecase(networkProp), networkDetail, resourceEntry[networkProp]);
+                    // only add marks for parts of the timing that actually have a value
+                    var timeStamp = resourceEntry[networkProp];
+                    if(timeStamp){ // 0 absolutely counts as not having a value
+                        riqPerformance.addMark('network_' + snakecase(networkProp), networkDetail, timeStamp);
+                    }
                 });
             } else if (eventName !== 'network_error') { // TODO: only log this in debug mode
                 console.log('could not find entry for ' + url + ' that started after we sent the request');
@@ -532,7 +536,10 @@ window['XMLHttpRequest'] = function() {
         return origOpen.apply(this, arguments);
     };
     xhr.addEventListener('load', function(e) {
-        var status = e.target && e.target.status || 0;
+        if(!e.target){
+            return;
+        }
+        var status =  (<XMLHttpRequest> e.target).status || 0;
         // 304 never makes it here because the browser turns it into 200 for some reason but just in case...
         if (200 <= status && status < 300 || status === 304) {
             success.apply(this, arguments);

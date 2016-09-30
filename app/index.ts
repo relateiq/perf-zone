@@ -194,6 +194,18 @@ angular.module('SampleModule', [])
                     });
                 };
 
+                ctrl.clickToSendNetworkRequestBlockedByJsExecution = function () {
+                    $http({ method: 'get', url: 'https://httpbin.org/get' }).then(function() {
+                        ctrl.clickToRenderADiv('blocked network success');
+                    });
+                    setTimeout(function () {
+                        for(var i = 0; i < 10000000; i++){
+                            var doingThings = "things" + i;
+                            doingThings += "to waste time";
+                        }
+                    }, 1);
+                };
+
                 ctrl.logTimelines = logTimelines.logTimelines;
             },
             controllerAs: '$ctrl'

@@ -27,6 +27,9 @@ function logTimelines() {
     }
     changedTimelineIds.forEach(function(timelineId) {
         var timeline = timelineMap[timelineId];
+        timeline.marks = timeline.marks.sort(function (mark1, mark2) {
+            return mark1.timestamp - mark2.timestamp;
+        });
         logTimeline(timeline);
     });
 };
@@ -46,7 +49,9 @@ function logTimeline(timeline) {
         'DURATION',
         timeline.marks[timeline.marks.length - 1].timestamp.toFixed(2),
         'trigger components',
-        timeline.components
+        timeline.components,
+        'heap_used',
+        timeline.heap_used
     );
     console.log(timeline.marks.reduce(function(accum, m) {
         var result = accum;
@@ -54,7 +59,7 @@ function logTimeline(timeline) {
         if (m.name.indexOf('network') === 0) {
             result += '\t' + m.name.toUpperCase() + '\t' + m.url;
         } else if (m.name === 'render') {
-            result += '\tRENDER\t' + m.componenent_list;
+            result += '\tRENDER\t' + m.components;
         } else {
             result += '\t' + m.name.toUpperCase();
         }
