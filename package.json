@@ -29,9 +29,7 @@
     "app": false
   },
   "scripts": {
-    "test": "bin/iqb test",
-    "start": "bin/iqb start",
-    "preversion": "bin/iqb test"
+    "start": "bin/iqb start"
   },
   "peerDependencies": {
     "angular": "1.x"
