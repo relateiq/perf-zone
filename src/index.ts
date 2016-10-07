@@ -151,11 +151,15 @@ function trackedInterval() {
         return riqPerformance.setInterval.apply(this, arguments);
     }
     const origCb = arguments[0];
+    let stack;
+    if(riqPerformance.logTimeoutStacks){
+        stack = new Error().stack;
+    }
     let count = 0;
     arguments[0] = function riqPerfTrackedIntervalCallback() {
         // treat interval execution like an event so it will have it's own timeline and complete previous
         currentTimeline = waitingTimelinesById[timeoutIdToTimelineId[intervalId]];
-        riqPerformance.addMark('interval_callback');
+        riqPerformance.addMark('interval_callback', {stack : stack});
         if (typeof origCb === 'function') {
             origCb.apply(this, arguments);
         }
@@ -163,6 +167,7 @@ function trackedInterval() {
     };
     const intervalId = riqPerformance.setInterval.apply(this, arguments);
     const timeline = getCurrentTimeline();
+    riqPerformance.addMark('set_interval', {stack : stack, delay : arguments[1]});
     if (timeline) {
         timeline.totalIntervals++;
         incrementTimelineWait(timeline);
@@ -176,10 +181,14 @@ function trackedTimeout() {
         return riqPerformance.setTimeout.apply(this, arguments);
     }
     const origCb = arguments[0];
+    let stack;
+    if(riqPerformance.logTimeoutStacks){
+        stack = new Error().stack;
+    }
 
     arguments[0] = function riqPerfTrackedTimeoutCallback() {
         currentTimeline = completeTimeout(timeoutId);
-        riqPerformance.addMark('timeout_callback');
+        riqPerformance.addMark('timeout_callback', {stack : stack});
         if (typeof origCb === 'function') {
             origCb.apply(this, arguments);
         };
@@ -188,6 +197,7 @@ function trackedTimeout() {
 
     const timeoutId = riqPerformance.setTimeout.apply(this, arguments);
     const timeline = getCurrentTimeline();
+    riqPerformance.addMark('set_timeout', {stack : stack, delay : arguments[1]});
     if (timeline) {
         timeline.totalTimeouts++;
         incrementTimelineWait(timeline);
@@ -242,7 +252,9 @@ function getAttributeAndRespectRegex(node, attr) {
 
 function getTcFromNode(node: Node) {
     if (node instanceof Element) {
-        return getAttributeAndRespectRegex(node, 'tc') || getAttributeAndRespectRegex(node, 'class');
+        return getAttributeAndRespectRegex(node, 'tc') ||
+        getAttributeAndRespectRegex(node, 'tv') ||
+        getAttributeAndRespectRegex(node, 'class');
     }
 }
 
@@ -465,6 +477,7 @@ const riqPerformance = {
     onTimelineComplete: function(timeline: RiqPerfTimeline) {
         //noop to prevent npes
     },
+    logTimeoutStacks : false,
     started: false,
     ignoreTcOrClassRegex: new RegExp('(^|\\s)+((ng-[^\\s]+))', 'g'),
     start: function start(cb?: (timeline: RiqPerfTimeline) => void) {
@@ -495,7 +508,7 @@ const riqPerformance = {
     clearTimeout: window.clearTimeout,
     setInterval: window.setInterval,
     clearInterval: window.clearInterval,
-    addMark: function addMark(name: string, detail: { [key: string]: any }, timestampOverride?: number) {
+    addMark: function addMark(name: string, detail?: { [key: string]: any }, timestampOverride?: number) {
         const timeline = getCurrentTimeline();
         if (timeline) {
             const mark = makeMark.call(this, name, detail, timestampOverride, timeline);

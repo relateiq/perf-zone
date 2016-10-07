@@ -92,6 +92,11 @@ function logTimeline(timeline) {
             result += '\tRENDER\t' + m.components;
         } else {
             result += '\t' + m.name.toUpperCase();
+            ['delay', 'stack'].forEach(function (detailKey) {
+                if(m[detailKey] !== undefined){
+                   result += '\t' + detailKey + '\t' + m[detailKey];
+                }
+            });
         }
 
         return result;
@@ -115,7 +120,7 @@ function logTimeline(timeline) {
     console.log('total sum: ', times.js + times.network + times.timeouts);
 }
 
-module.exports = { logTimelines, logTimeline };
+module.exports = { logTimelines, logTimeline, analyzeTimeline };
 //FOR DEBUGGING ONLY
 if (window) {
     window['logTimelines'] = logTimelines;
