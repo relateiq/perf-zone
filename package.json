@@ -1,6 +1,6 @@
 {
   "name": "spa-perf",
-  "version": "0.1.2",
+  "version": "1.0.0",
   "description": "a library for measuring performance in single page apps",
   "main": ".src/index.js",
   "publishConfig": {
