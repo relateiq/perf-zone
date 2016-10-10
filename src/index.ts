@@ -1,7 +1,7 @@
 ///<reference path="../typings/index.d.ts" />
 declare var require: NodeRequire;
 const flatten = require('lodash/flatten');
-const snakecase = require('lodash/snakecase');
+const snakecase = require('lodash/snakeCase');
 const unique = require('lodash/uniq');
 
 interface MemoryInfo {
