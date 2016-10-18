@@ -29,7 +29,9 @@
     "app": false
   },
   "scripts": {
-    "start": "bin/iqb start"
+    "start": "bin/iqb start",
+    "prepublish": "bin/iqb build",
+    "postpublish": "git push"
   },
   "peerDependencies": {
     "angular": "1.x"
