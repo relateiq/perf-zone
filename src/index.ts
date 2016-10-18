@@ -57,6 +57,7 @@ let lastEvent: Event;
 let lastEventTimestamp: number;
 const timeoutIdToTimelineId: AsyncIdToTimelineIdMap = {};
 const networkIdToTimelineId: AsyncIdToTimelineIdMap = {};
+const animationIdToTimelineId: AsyncIdToTimelineIdMap = {};
 let waitingTimelinesById: TimelineMap = {};
 let notWaitingTimelinesById: TimelineMap = {};
 const timeoutIdChainCounts: { [key: number]: number } = {};
@@ -206,11 +207,47 @@ function trackedTimeout() {
     return timeoutId;
 }
 
+function trackedAnimationFrame() {
+    if (!riqPerformance.started) {
+        return riqPerformance.requestAnimationFrame.apply(this, arguments);
+    }
+    const origCb = arguments[0];
+    let stack;
+    if(riqPerformance.logTimeoutStacks){
+        stack = new Error().stack;
+    }
+
+    arguments[0] = function riqPerfTrackedAnimationCallback() {
+        currentTimeline = completeAnimationFrame(animationId);
+        riqPerformance.addMark('request_animation_frame_callback', {stack : stack});
+        if (typeof origCb === 'function') {
+            origCb.apply(this, arguments);
+        };
+        riqPerformance.addMark('request_animation_frame_callback_done');
+    };
+
+    const animationId = riqPerformance.requestAnimationFrame.apply(this, arguments);
+    const timeline = getCurrentTimeline();
+    riqPerformance.addMark('request_animation_frame', {stack : stack, delay : arguments[1]});
+    if (timeline) {
+        incrementTimelineWait(timeline);
+        animationIdToTimelineId[animationId] = timeline.id;
+    }
+    return animationId;
+}
+
 function trackedClearTimeout(timeoutId: number) {
     if (riqPerformance.started) {
         completeTimeout(timeoutId);
     }
     riqPerformance.clearTimeout.call(this, timeoutId);
+}
+
+function trackedCancelAnimationFrame(animationId: number) {
+    if (riqPerformance.started) {
+        completeAnimationFrame(animationId);
+    }
+    riqPerformance.cancelAnimationFrame.call(this, animationId);
 }
 
 function incrementTimelineWait(timeline: RiqPerfTimeline) {
@@ -224,6 +261,10 @@ function maybeRemoveFromWaiting(timeline: RiqPerfTimeline) {
         waitingTimelinesById[timeline.id] = null;
         notWaitingTimelinesById[timeline.id] = timeline;
     }
+}
+
+function completeAnimationFrame(animationId: number) {
+    return completeAsync(animationId, animationIdToTimelineId);
 }
 
 function completeTimeout(timeoutId: number) {
@@ -508,6 +549,8 @@ const riqPerformance = {
     clearTimeout: window.clearTimeout,
     setInterval: window.setInterval,
     clearInterval: window.clearInterval,
+    requestAnimationFrame : window.requestAnimationFrame,
+    cancelAnimationFrame : window.cancelAnimationFrame,
     addMark: function addMark(name: string, detail?: { [key: string]: any }, timestampOverride?: number) {
         const timeline = getCurrentTimeline();
         if (timeline) {
@@ -585,6 +628,13 @@ window.setTimeout = trackedTimeout;
 window.clearTimeout = trackedClearTimeout;
 window.setInterval = trackedInterval;
 window.clearInterval = trackedClearInterval;
+if(window.requestAnimationFrame){
+    window.requestAnimationFrame = trackedAnimationFrame;
+}
+
+if(window.cancelAnimationFrame){
+    window.cancelAnimationFrame = trackedCancelAnimationFrame;
+}
 
 riqPerfEventCapture(new CustomEvent('page_load'));
 

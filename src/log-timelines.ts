@@ -42,7 +42,8 @@ function analyzeTimeline(timeline) {
         if (mark.name === 'render' ||
             mark.name === 'network_send' ||
             mark.name === 'timeout_callback_done' ||
-            mark.name === 'interval_callback_done') {
+            mark.name === 'interval_callback_done' ||
+            mark.name === 'request_animation_frame_callback_done') {
             map.js += mark.timestamp - map.lastJSStart;
             map.lastJSStart = mark.timestamp;
             map.total = mark.name === 'render' && mark.timestamp || map.total;
@@ -55,7 +56,8 @@ function analyzeTimeline(timeline) {
             map.lastJSStart = mark.timestamp;
         }
         if (mark.name === 'timeout_callback' ||
-            mark.name === 'interval_callback') {
+            mark.name === 'interval_callback' ||
+            mark.name === 'request_animation_frame_callback') {
             map.timeouts += mark.timestamp - map.lastJSStart;
             map.lastJSStart = mark.timestamp;
         }

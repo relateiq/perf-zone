@@ -235,6 +235,13 @@ angular.module('SampleModule', [])
                     }
                 };
 
+                ctrl.requestAnimationFrame = function () {
+                      let id = window.requestAnimationFrame(function () {
+                         ctrl.clickToRenderADiv('animation frame fired');
+                      });
+                      ctrl.clickToRenderADiv('animation frame request');
+                };
+
                 ctrl.logTimelines = logTimelines.logTimelines;
             },
             controllerAs: '$ctrl'
