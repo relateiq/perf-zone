@@ -1,13 +1,13 @@
-(function () {
+(function() {
     if (!window) {
         return;
     }
 
     if ('performance' in window === undefined) {
-        window['performance'] = new Performance();
+        window['performance'] = new Performance() || <Performance>{};
     }
 
-    Date.now = (Date.now || function () { // thanks IE8
+    Date.now = (Date.now || function() { // thanks IE8
         return new Date().getTime();
     });
 
