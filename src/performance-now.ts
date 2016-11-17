@@ -3,7 +3,7 @@
         return;
     }
 
-    if ('performance' in window === undefined) {
+    if (window['performance'] === undefined) {
         window['performance'] = new Performance() || <Performance>{};
     }
 
@@ -11,7 +11,7 @@
         return new Date().getTime();
     });
 
-    if ('now' in window.performance === undefined) {
+    if (window.performance['now'] === undefined) {
 
         var nowOffset = Date.now();
 
