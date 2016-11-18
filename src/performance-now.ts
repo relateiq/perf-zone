@@ -4,7 +4,12 @@
     }
 
     if (window['performance'] === undefined) {
-        window['performance'] = new Performance() || <Performance>{};
+        if (window['Performance'] !== undefined) {
+            window['performance'] = new Performance();
+        } else {
+            window['performance'] = <Performance>{}; 
+        }
+            
     }
 
     Date.now = (Date.now || function() { // thanks IE8
